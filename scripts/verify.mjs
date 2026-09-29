@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const buildPath = join(projectRoot, 'scripts', 'build.mjs');
 let failures = 0;
+let tests = 0;
 
 async function test(name, run) {
+  tests++;
   try {
     await run();
     console.log(`PASS ${name}`);
@@ -92,9 +94,52 @@ await test('build CLI names the missing question-bank file', () => {
   }
 });
 
+const easyBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'easy.json'), 'utf8'));
+
+await test('Easy bank contains exactly 25 questions with sequential IDs 1-25', () => {
+  assert.equal(easyBank.length, 25);
+  assert.deepEqual(easyBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
+});
+
+await test('Easy questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
+  const { validateQuestion } = await import('./build.mjs');
+  easyBank.forEach((item, index) => {
+    assert.deepEqual(validateQuestion(item, 'easy', index + 1), [], `Easy ${index + 1}`);
+    assert.ok(item.tags.length > 0, `Easy ${index + 1} must identify its topics`);
+  });
+});
+
+await test('Easy prompts are unique after case, punctuation and whitespace normalization', () => {
+  const prompts = easyBank.map(item => item.prompt.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim());
+  assert.equal(new Set(prompts).size, prompts.length);
+});
+
+await test('Easy primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
+  const counts = {};
+  for (const item of easyBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
+  assert.deepEqual(counts, {
+    'Mission and Functions': 2,
+    'Tactical Roles': 3,
+    'Capabilities and Limitations': 3,
+    'Weapon Classification': 2,
+    'Effects of Fires': 4,
+    'Philippine Operational Environment': 2,
+    'Four Basic Tasks': 3,
+    'FA System Elements and Responsibilities': 4,
+    'Employment Tactics and Integrated Decisions': 2,
+  });
+});
+
+await test('Easy answers have 7/6/6/6 occurrences across A/B/C/D', () => {
+  const counts = [0, 0, 0, 0];
+  for (const item of easyBank) counts[item.answer]++;
+  assert.deepEqual(counts, [7, 6, 6, 6]);
+  assert.ok(counts.every(count => count === 6 || count === 7));
+});
+
 if (failures > 0) {
   console.error(`${failures} verification test(s) failed`);
   process.exitCode = 1;
 } else {
-  console.log('All 6 verification tests passed');
+  console.log(`All ${tests} verification tests passed`);
 }
