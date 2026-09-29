@@ -200,6 +200,169 @@ await test('Cross-bank duplicate check rejects a literal case, punctuation and s
   }));
 });
 
+const hardBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'hard.json'), 'utf8'));
+
+await test('Hard bank contains exactly 25 questions with sequential IDs 1-25', () => {
+  assert.equal(hardBank.length, 25);
+  assert.deepEqual(hardBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
+});
+
+await test('Hard questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
+  const { validateQuestion } = await import('./build.mjs');
+  hardBank.forEach((item, index) => {
+    assert.deepEqual(validateQuestion(item, 'hard', index + 1), [], `Hard ${index + 1}`);
+    assert.ok(item.tags.length >= 3, `Hard ${index + 1} must integrate several tagged concepts`);
+  });
+});
+
+await test('Hard primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
+  const counts = {};
+  for (const item of hardBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
+  assert.deepEqual(counts, {
+    'Mission and Functions': 2,
+    'Tactical Roles': 3,
+    'Capabilities and Limitations': 3,
+    'Weapon Classification': 2,
+    'Effects of Fires': 4,
+    'Philippine Operational Environment': 2,
+    'Four Basic Tasks': 3,
+    'FA System Elements and Responsibilities': 4,
+    'Employment Tactics and Integrated Decisions': 2,
+  });
+});
+
+await test('Hard answers have 6/6/7/6 occurrences across A/B/C/D', () => {
+  const counts = [0, 0, 0, 0];
+  for (const item of hardBank) counts[item.answer]++;
+  assert.deepEqual(counts, [6, 6, 7, 6]);
+});
+
+await test('Hard scenarios exercise every required competing constraint', () => {
+  const HARD_CONSTRAINT_TAGS = [
+    'communications failure',
+    'counterfire exposure',
+    'ammunition economy',
+    'island movement',
+    'survey and MET accuracy',
+    'target acquisition',
+    'maneuver timing',
+    'continuity of fires',
+    'offensive positioning',
+    'defensive positioning',
+  ];
+  const hardTags = new Set(hardBank.flatMap(item => item.tags));
+  const missing = HARD_CONSTRAINT_TAGS.filter(tag => !hardTags.has(tag));
+  assert.deepEqual(missing, [], `Hard constraint tags missing: ${missing.join(', ')}`);
+});
+
+await test('All 75 prompts are unique within and across the Easy, Medium and Hard banks', () => {
+  assert.equal(easyBank.length + mediumBank.length + hardBank.length, 75);
+  assertUniquePrompts({ easy: easyBank, medium: mediumBank, hard: hardBank });
+});
+
+const REQUIRED_TAGS = [
+  // Mission (slide 15)
+  'mission',
+  'destroy/neutralize/suppress mission',
+  'timely and accurate support',
+  'integration of fire-support means',
+  // Functions (slide 16)
+  'functions',
+  'continuous fire support',
+  'communications',
+  'mobility',
+  'survey',
+  'meteorological data',
+  'target acquisition',
+  'fire direction and coordination',
+  'fire-support cells',
+  'fire-support elements',
+  'command and control of additional artillery',
+  // Tactical roles (slide 17)
+  'close support',
+  'attack at depth',
+  'interdiction',
+  'counterfires',
+  // Capabilities (slide 18)
+  'all-weather and all-terrain fires',
+  'rapid shifting and massing',
+  'add depth to the battlefield',
+  'shell/fuze variety',
+  'continuous support by judicious displacement',
+  // Limitations (slide 19)
+  'limited self-defense',
+  'point-target ammunition cost',
+  'detectable firing signature',
+  'weapon range limits',
+  // Classification by caliber (slide 20)
+  'classification by caliber',
+  'light',
+  'medium',
+  'heavy',
+  'very heavy',
+  // Classification by means of transport (slides 21-24)
+  'classification by transport',
+  'towed',
+  'self-propelled',
+  'aerial',
+  // Effects of fires and computed-effect thresholds (slides 25-28)
+  'destroy',
+  'neutralize',
+  'suppress',
+  'disrupt',
+  'defeat',
+  'diversion',
+  '30-percent computed-effect threshold',
+  '10-percent computed-effect threshold',
+  '3-percent computed-effect threshold',
+  // Philippine archipelagic environment (slide 29)
+  'Philippine archipelago',
+  'rapid displacement between islands',
+  'continuity during displacement',
+  // Four basic tasks (slide 31)
+  'support forces in contact',
+  'support the concept of operations',
+  'synchronize fire support',
+  'economize resources',
+  'sustain FA operations',
+  // Ten system elements not already listed above (slide 32)
+  'weapon/ammunition combinations',
+  'organization',
+  'ballistic meteorology',
+  'logistics',
+  'employment tactics',
+  // Specialized responsibilities and relationships (slides 33-38)
+  'observers and collectors',
+  'drones and vertical imagery',
+  'FA intelligence',
+  'Target Acquisition Platoon',
+  'FA Regiment and FA Bn intelligence office',
+  'fire direction center',
+  'call-for-fire conversion',
+  'suitable weapon coverage',
+  'command and support relationships',
+  'FA platoon smallest deployable unit',
+  'common survey grid',
+  'five requirements for accurate predicted fires',
+  'radio and digital communications',
+  'Signal Platoon',
+  'Headquarters and Headquarters Battery',
+  'mobility assets',
+  'offensive positioning',
+  'defensive positioning',
+  'continuity of fires',
+];
+
+await test('Coverage registry lists each required tag once', () => {
+  assert.equal(new Set(REQUIRED_TAGS).size, REQUIRED_TAGS.length);
+});
+
+await test('Every required coverage tag appears across the 75-question bank', () => {
+  const allTags = new Set([...easyBank, ...mediumBank, ...hardBank].flatMap(item => item.tags));
+  const missing = REQUIRED_TAGS.filter(tag => !allTags.has(tag));
+  assert.deepEqual(missing, [], `Coverage tags missing: ${missing.join(', ')}`);
+});
+
 if (failures > 0) {
   console.error(`${failures} verification test(s) failed`);
   process.exitCode = 1;
