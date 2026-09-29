@@ -131,15 +131,15 @@
     "id": 9,
     "difficulty": "hard",
     "category": "Weapon Classification",
-    "prompt": "For a Philippine Army inter-island move, the first vessel can carry only medium-caliber weapons that are classified as towed. The movement list gives five weapons with their caliber and transport classification: 120 mm towed, 121 mm towed, 160 mm self-propelled, 210 mm towed, and 120 mm aerial. Which weapon or weapons belong on the first vessel?",
+    "prompt": "For a Philippine Army inter-island move, the first vessel can carry only medium-caliber weapons that are classified as towed. The movement list gives five weapons with their caliber and transport classification: 120 mm towed, 121 mm towed, 160 mm self-propelled, 210 mm towed, and 121 mm aerial. Which weapon or weapons belong on the first vessel?",
     "options": [
-      "The 120 mm towed and 121 mm towed weapons",
+      "The 121 mm towed and 121 mm aerial weapons",
       "The 121 mm towed and 210 mm towed weapons",
       "The 121 mm towed weapon only",
       "The 121 mm towed and 160 mm self-propelled weapons"
     ],
     "answer": 2,
-    "explanation": "Slide 20 places medium caliber at 121 through 160 mm, so both 120 mm weapons are light and the 210 mm weapon is heavy. Slide 21 classifies means of transport separately, so the 160 mm self-propelled weapon is medium but not towed, leaving only the 121 mm towed weapon.",
+    "explanation": "Slide 20 places medium caliber at 121 through 160 mm: the 121 mm towed, 160 mm self-propelled, and 121 mm aerial candidates meet that caliber condition, while 120 mm is light and 210 mm is heavy. Slide 21 classifies transport separately. The medium-caliber aerial and self-propelled weapons are not towed, leaving only the 121 mm towed weapon.",
     "tags": ["classification by caliber", "classification by transport", "light", "medium", "heavy", "towed", "self-propelled", "aerial", "island movement"],
     "sourceSlides": [20, 21]
   },

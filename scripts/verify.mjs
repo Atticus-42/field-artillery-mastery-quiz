@@ -239,6 +239,17 @@ await test('Hard 1 correct mission judgment includes all three fire effects and 
   assert.match(answer, /integrat/i);
 });
 
+await test('Hard 9 aerial candidate meets the caliber condition and appears in a distractor', () => {
+  const item = hardBank[8];
+  const aerial = item.prompt.match(/(\d+) mm aerial/);
+  assert.ok(aerial, 'scenario must include an aerial candidate');
+  const caliber = Number(aerial[1]);
+  assert.ok(caliber >= 121 && caliber <= 160, `aerial candidate ${caliber} mm must be medium caliber`);
+  assert.ok(item.options.some((option, index) => index !== item.answer && option.includes(`${caliber} mm aerial`)), 'a plausible distractor must include the medium-caliber aerial candidate');
+  assert.equal(item.answer, 2);
+  assert.match(item.options[item.answer], /121 mm towed weapon only/);
+});
+
 await test('Hard 14 defeat judgment has explicit evidence of lost will beyond withdrawal', () => {
   const item = hardBank[13];
   assert.match(item.prompt, /\brefus\w*\b.*\b(fight|resistance)\b/i, 'scenario must report refusal to keep fighting');
@@ -420,7 +431,7 @@ const ASSESSED_CONCEPTS = {
   'easy:8': { reason: 'Apply the specified range limit despite all-weather capability.', tags: ['weapon range limits'] },
   'medium:9': { reason: 'Correct both boundary-caliber errors using the exact bands.', tags: ['classification by caliber', 'light', 'heavy', 'very heavy'] },
   'easy:9': { reason: 'Reclassify a 155 mm weapon as medium.', tags: ['medium'] },
-  'hard:9': { reason: 'Select only the weapon satisfying both caliber and towed transport constraints.', tags: ['classification by transport', 'towed', 'aerial'] },
+  'hard:9': { reason: 'Reject a medium-caliber aerial candidate on transport class, selecting only the medium towed weapon.', tags: ['classification by transport', 'towed', 'aerial'] },
   'medium:10': { reason: 'Keep caliber classification separate from self-propelled transport.', tags: ['self-propelled'] },
   'easy:11': { reason: 'Replace neutralization with destruction when the force is physically ineffective until reconstituted.', tags: ['destroy'] },
   'easy:12': { reason: 'Choose neutralization for a short operation-specific interruption.', tags: ['neutralize'] },
