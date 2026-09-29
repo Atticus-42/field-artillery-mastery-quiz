@@ -4,11 +4,783 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Field Artillery Mastery Quiz</title>
+  <style>
+    :root {
+      --color-bg: #f4f3ec;
+      --color-surface: #ffffff;
+      --color-text: #1d2119;
+      --color-muted: #454b3e;
+      --color-border: #7c8270;
+      --color-accent: #3f4d22;
+      --color-accent-text: #ffffff;
+      --color-warning-bg: #fff3d1;
+      --color-warning-border: #8a5f00;
+      --color-correct: #1c6530;
+      --color-incorrect: #9e2418;
+      --color-focus: #1a4fd1;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 1rem;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .site-header, .app { width: 100%; max-width: 52rem; margin: 0 auto; padding: 1rem; }
+    .site-header { padding-bottom: 0; }
+    .eyebrow { margin: 0; font-weight: 600; color: var(--color-muted); }
+    h1, h2, h3, h4 { line-height: 1.25; }
+    h1 { margin: 0.25rem 0 0.5rem; font-size: 1.75rem; }
+    button {
+      font: inherit;
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0.625rem 1rem;
+      border: 2px solid var(--color-accent);
+      border-radius: 0.375rem;
+      background: var(--color-accent);
+      color: var(--color-accent-text);
+      cursor: pointer;
+    }
+    button.secondary { background: var(--color-surface); color: var(--color-accent); }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+    :focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+    .study-warning {
+      border: 2px solid var(--color-warning-border);
+      border-radius: 0.5rem;
+      background: var(--color-warning-bg);
+      padding: 1rem;
+    }
+    .study-warning p { margin-top: 0; }
+    .study-confirm {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      min-height: 44px;
+      padding: 0.5rem 0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .study-confirm input { flex: none; width: 1.5rem; height: 1.5rem; margin: 0.1rem 0 0; }
+    .mode-list {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    }
+    .mode-button { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; text-align: left; }
+    .mode-name { font-size: 1.125rem; font-weight: 700; }
+    .mode-desc { font-size: 0.9375rem; }
+    .privacy-note, .question-category, .results-reminder { color: var(--color-muted); }
+    progress { width: 100%; height: 0.75rem; }
+    fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+    legend { display: block; max-width: 100%; margin-bottom: 0.75rem; padding: 0; font-size: 1.125rem; font-weight: 600; white-space: normal; }
+    .option {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      min-height: 44px;
+      margin-bottom: 0.5rem;
+      padding: 0.75rem;
+      border: 2px solid var(--color-border);
+      border-radius: 0.5rem;
+      background: var(--color-surface);
+      cursor: pointer;
+    }
+    .option input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0.15rem 0 0; }
+    .option-body { min-width: 0; }
+    .option-letter { font-weight: 700; }
+    .option-tag { display: block; font-size: 0.875rem; font-weight: 700; }
+    .option-correct { border-color: var(--color-correct); }
+    .option-correct .option-tag { color: var(--color-correct); }
+    .option-incorrect { border-color: var(--color-incorrect); }
+    .option-incorrect .option-tag { color: var(--color-incorrect); }
+    .validation-message { color: var(--color-incorrect); font-weight: 600; }
+    .feedback { margin-top: 1rem; padding: 0.75rem 1rem; border-left: 6px solid var(--color-border); background: var(--color-surface); }
+    .feedback p { margin: 0.25rem 0; }
+    .feedback-correct { border-left-color: var(--color-correct); }
+    .feedback-incorrect { border-left-color: var(--color-incorrect); }
+    .quiz-actions, .results-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
+    .table-wrap { max-width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: var(--color-surface); }
+    caption { text-align: left; padding-bottom: 0.5rem; }
+    th, td { padding: 0.5rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
+    .review-list { padding-left: 1.25rem; }
+    .review-item { margin-bottom: 1.25rem; }
+    .review-item p { margin: 0.25rem 0; }
+    @media print {
+      body { background: #ffffff; }
+      .results-actions, .noscript { display: none !important; }
+    }
+  </style>
 </head>
 <body>
+  <header class="site-header">
+    <p class="eyebrow">Philippine Army · Field Artillery Operations</p>
+    <h1>Field Artillery Mastery Quiz</h1>
+  </header>
+
+  <main id="app" class="app">
+    <noscript><p class="noscript">This quiz needs JavaScript enabled in your browser.</p></noscript>
+
+    <section id="view-landing" class="view view-landing" aria-labelledby="landing-heading">
+      <h2 id="landing-heading">Before you begin</h2>
+      <div id="study-warning" class="study-warning">
+        <p><strong>This mock examination is a practice aid only.</strong> It cannot replace studying the complete Field Artillery Operations lesson, and repeated attempts are not a substitute for that study.</p>
+        <label class="study-confirm" for="study-confirm">
+          <input type="checkbox" id="study-confirm" autocomplete="off">
+          <span>I understand that I must study the complete lesson and not rely only on this mock examination.</span>
+        </label>
+      </div>
+
+      <h2 id="difficulty-heading" tabindex="-1">Choose a difficulty</h2>
+      <p id="mode-hint" class="mode-hint" role="status" aria-live="polite">Check the study confirmation above to enable the difficulty buttons.</p>
+      <div id="mode-list" class="mode-list" role="group" aria-labelledby="difficulty-heading">
+        <button type="button" id="mode-easy" class="mode-button mode-easy" disabled aria-describedby="mode-hint">
+          <span class="mode-name">Easy</span>
+          <span class="mode-desc">25 questions. One primary doctrinal judgment in each situation.</span>
+        </button>
+        <button type="button" id="mode-medium" class="mode-button mode-medium" disabled aria-describedby="mode-hint">
+          <span class="mode-name">Medium</span>
+          <span class="mode-desc">25 questions. Compare, diagnose, and choose among plausible options.</span>
+        </button>
+        <button type="button" id="mode-hard" class="mode-button mode-hard" disabled aria-describedby="mode-hint">
+          <span class="mode-name">Hard</span>
+          <span class="mode-desc">25 questions. Integrate several concepts under competing constraints.</span>
+        </button>
+      </div>
+      <p class="privacy-note">No login and no tracking. Your answers stay in this browser tab and are cleared when you refresh or close it.</p>
+    </section>
+
+    <section id="view-quiz" class="view view-quiz" hidden aria-labelledby="quiz-heading">
+      <h2 id="quiz-heading">Examination</h2>
+      <div class="quiz-progress">
+        <label for="quiz-progress">Answers checked</label>
+        <progress id="quiz-progress" max="25" value="0"></progress>
+        <p id="quiz-status" class="quiz-status" role="status" aria-live="polite"></p>
+      </div>
+      <h3 id="question-heading" class="question-heading" tabindex="-1">Question</h3>
+      <p id="question-category" class="question-category"></p>
+      <div id="question-area" class="question-area"></div>
+      <p id="validation-message" class="validation-message" role="alert" tabindex="-1" hidden></p>
+      <div id="answer-feedback" class="feedback" tabindex="-1" hidden></div>
+      <div class="quiz-actions">
+        <button type="button" id="btn-prev" class="secondary">Previous question</button>
+        <button type="button" id="btn-check">Check answer</button>
+        <button type="button" id="btn-next">Next question</button>
+        <button type="button" id="btn-finish">View results</button>
+      </div>
+    </section>
+
+    <section id="view-results" class="view view-results" hidden aria-labelledby="results-heading">
+      <h2 id="results-heading" tabindex="-1">Results</h2>
+      <div id="results-summary" class="results-summary"></div>
+      <p class="results-reminder">This score is practice feedback only. Study the complete lesson; do not rely only on this mock examination.</p>
+      <div class="results-actions">
+        <button type="button" id="btn-print" class="secondary">Print or save results</button>
+        <button type="button" id="btn-retake">Retake same difficulty</button>
+        <button type="button" id="btn-choose" class="secondary">Choose another difficulty</button>
+      </div>
+      <section class="results-topics" aria-labelledby="topics-heading">
+        <h3 id="topics-heading">Topic analysis</h3>
+        <div class="table-wrap">
+          <table id="results-categories">
+            <caption>Correct answers by primary topic. A topic is a strength at 75% or higher and a gap below 75%.</caption>
+            <thead>
+              <tr><th scope="col">Topic</th><th scope="col">Correct</th><th scope="col">Result</th></tr>
+            </thead>
+            <tbody id="results-categories-body"></tbody>
+          </table>
+        </div>
+        <h4>Strengths</h4>
+        <ul id="results-strengths" class="results-strengths"></ul>
+        <h4>Gaps to review in the lesson</h4>
+        <ul id="results-gaps" class="results-gaps"></ul>
+      </section>
+      <section class="results-review" aria-labelledby="review-heading">
+        <h3 id="review-heading">Full answer review</h3>
+        <ol id="results-review" class="review-list"></ol>
+      </section>
+    </section>
+
+    <section id="view-unavailable" class="view view-unavailable" hidden aria-labelledby="unavailable-heading">
+      <h2 id="unavailable-heading" tabindex="-1">Quiz unavailable</h2>
+      <p>The quiz is unavailable because its question data could not be loaded or did not pass validation, so no examination can start. Please try again later or inform your instructor.</p>
+    </section>
+  </main>
+
   <script type="application/json" id="questions-easy">{{EASY_QUESTIONS}}</script>
   <script type="application/json" id="questions-medium">{{MEDIUM_QUESTIONS}}</script>
   <script type="application/json" id="questions-hard">{{HARD_QUESTIONS}}</script>
-  <!-- APP_INIT -->
+  <script>
+  (function () {
+    'use strict';
+
+    var MODES = ['easy', 'medium', 'hard'];
+    var MODE_LABELS = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    var QUESTION_COUNT = 25;
+    var LETTERS = ['A', 'B', 'C', 'D'];
+    var CATEGORY_ORDER = [
+      'Mission and Functions',
+      'Tactical Roles',
+      'Capabilities and Limitations',
+      'Weapon Classification',
+      'Effects of Fires',
+      'Philippine Operational Environment',
+      'Four Basic Tasks',
+      'FA System Elements and Responsibilities',
+      'Employment Tactics and Integrated Decisions'
+    ];
+    // A primary topic counts as a strength at or above this percentage, otherwise a gap.
+    var STRENGTH_THRESHOLD = 75;
+    // Mastery bands, checked from the top: the first band whose minimum is met applies.
+    var MASTERY_BANDS = [
+      { min: 90, name: 'Mastery', description: 'Consistent command of the lesson at this difficulty.' },
+      { min: 75, name: 'Proficient', description: 'Solid understanding. Restudy the topics listed as gaps.' },
+      { min: 60, name: 'Developing', description: 'Partial understanding. Restudy the lesson before retaking.' },
+      { min: 0, name: 'Needs review', description: 'Study the complete lesson again before another attempt.' }
+    ];
+
+    // Mirrors validateQuestion in scripts/build.mjs; the verifier checks both agree error-for-error.
+    function validateQuestion(question, expectedDifficulty, expectedId) {
+      if (question === null || typeof question !== 'object' || Array.isArray(question)) {
+        return ['question must be an object'];
+      }
+      var errors = [];
+      if (!Number.isInteger(question.id) || question.id !== expectedId) {
+        errors.push('id must be integer ' + expectedId);
+      }
+      if (question.difficulty !== expectedDifficulty) {
+        errors.push('difficulty must be ' + expectedDifficulty);
+      }
+      ['category', 'prompt', 'explanation'].forEach(function (field) {
+        if (typeof question[field] !== 'string' || !question[field].trim()) {
+          errors.push(field + ' must be a nonempty string');
+        }
+      });
+      if (!Array.isArray(question.tags) || question.tags.some(function (tag) { return typeof tag !== 'string' || !tag.trim(); })) {
+        errors.push('tags must be an array of nonempty strings');
+      }
+      if (!Array.isArray(question.options) || question.options.length !== 4 || question.options.some(function (option) { return typeof option !== 'string' || !option.trim(); })) {
+        errors.push('options must contain four nonempty strings');
+      }
+      if (!Number.isInteger(question.answer) || question.answer < 0 || question.answer > 3) {
+        errors.push('answer must be an integer from 0 to 3');
+      }
+      if (!Array.isArray(question.sourceSlides) || question.sourceSlides.length === 0 || question.sourceSlides.some(function (slide) { return !Number.isInteger(slide) || slide < 15 || slide > 38; })) {
+        errors.push('sourceSlides must contain integers from 15 to 38');
+      }
+      return errors;
+    }
+
+    function validateBanks(banks) {
+      if (banks === null || typeof banks !== 'object') {
+        return { valid: false, errors: ['question banks must be an object'] };
+      }
+      var errors = [];
+      MODES.forEach(function (mode) {
+        var bank = banks[mode];
+        if (!Array.isArray(bank)) {
+          errors.push(mode + ' bank must be an array of ' + QUESTION_COUNT + ' questions');
+          return;
+        }
+        if (bank.length !== QUESTION_COUNT) {
+          errors.push(mode + ' bank must contain exactly ' + QUESTION_COUNT + ' questions (found ' + bank.length + ')');
+        }
+        bank.forEach(function (question, index) {
+          validateQuestion(question, mode, index + 1).forEach(function (error) {
+            errors.push(mode + ' question ' + (index + 1) + ': ' + error);
+          });
+        });
+      });
+      return { valid: errors.length === 0, errors: errors };
+    }
+
+    // Fisher-Yates shuffle of a copy; the source array is never mutated.
+    function shuffleQuestions(bank, random) {
+      if (typeof random !== 'function') random = Math.random;
+      var copy = Array.prototype.slice.call(bank);
+      for (var i = copy.length - 1; i > 0; i--) {
+        var j = Math.min(i, Math.max(0, Math.floor(random() * (i + 1))));
+        var held = copy[i];
+        copy[i] = copy[j];
+        copy[j] = held;
+      }
+      return copy;
+    }
+
+    function createAttempt(mode, banks, random) {
+      if (MODES.indexOf(mode) === -1) throw new Error('Unknown difficulty: ' + mode);
+      var questions = shuffleQuestions(banks[mode], random);
+      return {
+        mode: mode,
+        questions: questions,
+        current: 0,
+        responses: questions.map(function () { return { selected: null, checked: false }; })
+      };
+    }
+
+    function masteryBand(percentage) {
+      for (var i = 0; i < MASTERY_BANDS.length; i++) {
+        if (percentage >= MASTERY_BANDS[i].min) return MASTERY_BANDS[i];
+      }
+      return MASTERY_BANDS[MASTERY_BANDS.length - 1];
+    }
+
+    function computeResults(attempt) {
+      var byCategory = {};
+      var order = CATEGORY_ORDER.slice();
+      var score = 0;
+      var review = attempt.questions.map(function (question, index) {
+        var response = attempt.responses[index];
+        var correct = response.selected === question.answer;
+        if (correct) score++;
+        if (!byCategory[question.category]) {
+          byCategory[question.category] = { category: question.category, correct: 0, total: 0 };
+          if (order.indexOf(question.category) === -1) order.push(question.category);
+        }
+        byCategory[question.category].total++;
+        if (correct) byCategory[question.category].correct++;
+        return { number: index + 1, question: question, selected: response.selected, correct: correct };
+      });
+      var total = attempt.questions.length;
+      var percentage = total ? Math.round((score / total) * 100) : 0;
+      var categories = order.filter(function (name) { return byCategory[name]; }).map(function (name) {
+        var entry = byCategory[name];
+        entry.percentage = Math.round((entry.correct / entry.total) * 100);
+        entry.status = entry.percentage >= STRENGTH_THRESHOLD ? 'Strength' : 'Gap';
+        return entry;
+      });
+      return {
+        mode: attempt.mode,
+        score: score,
+        total: total,
+        percentage: percentage,
+        band: masteryBand(percentage),
+        categories: categories,
+        review: review
+      };
+    }
+
+    function deepFreeze(value) {
+      if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.freeze(value);
+        Object.keys(value).forEach(function (key) { deepFreeze(value[key]); });
+      }
+      return value;
+    }
+
+    // ----- State and DOM -----
+
+    var state = {
+      available: false,
+      errors: [],
+      banks: null,
+      studyConfirmed: false,
+      view: 'landing',
+      attempt: null,
+      results: null,
+      random: Math.random
+    };
+
+    function byId(id) { return document.getElementById(id); }
+
+    var ui = {
+      views: {
+        landing: byId('view-landing'),
+        quiz: byId('view-quiz'),
+        results: byId('view-results'),
+        unavailable: byId('view-unavailable')
+      },
+      studyConfirm: byId('study-confirm'),
+      modeHint: byId('mode-hint'),
+      difficultyHeading: byId('difficulty-heading'),
+      modeButtons: {
+        easy: byId('mode-easy'),
+        medium: byId('mode-medium'),
+        hard: byId('mode-hard')
+      },
+      quizHeading: byId('quiz-heading'),
+      quizProgress: byId('quiz-progress'),
+      quizStatus: byId('quiz-status'),
+      questionHeading: byId('question-heading'),
+      questionCategory: byId('question-category'),
+      questionArea: byId('question-area'),
+      validation: byId('validation-message'),
+      feedback: byId('answer-feedback'),
+      btnPrev: byId('btn-prev'),
+      btnCheck: byId('btn-check'),
+      btnNext: byId('btn-next'),
+      btnFinish: byId('btn-finish'),
+      resultsHeading: byId('results-heading'),
+      resultsSummary: byId('results-summary'),
+      resultsCategories: byId('results-categories-body'),
+      resultsStrengths: byId('results-strengths'),
+      resultsGaps: byId('results-gaps'),
+      resultsReview: byId('results-review'),
+      btnPrint: byId('btn-print'),
+      btnRetake: byId('btn-retake'),
+      btnChoose: byId('btn-choose'),
+      radios: []
+    };
+
+    function make(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function optionText(question, index) {
+      return LETTERS[index] + '. ' + question.options[index];
+    }
+
+    function showView(name) {
+      state.view = name;
+      Object.keys(ui.views).forEach(function (key) {
+        ui.views[key].hidden = key !== name;
+      });
+    }
+
+    function hideValidation() {
+      ui.validation.textContent = '';
+      ui.validation.hidden = true;
+    }
+
+    function showValidation(message) {
+      ui.validation.textContent = message;
+      ui.validation.hidden = false;
+      ui.validation.focus();
+    }
+
+    function checkedCount(attempt) {
+      return attempt.responses.filter(function (response) { return response.checked; }).length;
+    }
+
+    function firstUncheckedIndex(attempt) {
+      for (var i = 0; i < attempt.responses.length; i++) {
+        if (!attempt.responses[i].checked) return i;
+      }
+      return -1;
+    }
+
+    // ----- Study gate -----
+
+    function setStudyConfirmed(confirmed) {
+      state.studyConfirmed = Boolean(confirmed) && state.available;
+      ui.studyConfirm.checked = state.studyConfirmed;
+      MODES.forEach(function (mode) {
+        ui.modeButtons[mode].disabled = !state.studyConfirmed;
+      });
+      if (state.available) {
+        ui.modeHint.textContent = state.studyConfirmed
+          ? 'Difficulty buttons enabled. Choose Easy, Medium, or Hard to begin.'
+          : 'Check the study confirmation above to enable the difficulty buttons.';
+      }
+      return state.studyConfirmed;
+    }
+
+    // ----- Quiz flow -----
+
+    function startQuiz(mode) {
+      if (!state.available || !state.studyConfirmed || MODES.indexOf(mode) === -1) return false;
+      state.attempt = createAttempt(mode, state.banks, state.random);
+      state.results = null;
+      showView('quiz');
+      renderQuestion();
+      ui.questionHeading.focus();
+      return true;
+    }
+
+    function renderQuestion() {
+      var attempt = state.attempt;
+      var index = attempt.current;
+      var question = attempt.questions[index];
+      var response = attempt.responses[index];
+      var done = checkedCount(attempt);
+      var total = attempt.questions.length;
+
+      ui.quizHeading.textContent = MODE_LABELS[attempt.mode] + ' examination';
+      ui.quizProgress.setAttribute('max', String(total));
+      ui.quizProgress.setAttribute('value', String(done));
+      ui.quizStatus.textContent = 'Question ' + (index + 1) + ' of ' + total + '. ' + done + ' of ' + total + ' answers checked.';
+      ui.questionHeading.textContent = 'Question ' + (index + 1) + ' of ' + total;
+      ui.questionCategory.textContent = 'Topic: ' + question.category;
+
+      var fieldset = make('fieldset', 'question-fieldset');
+      fieldset.id = 'question-fieldset';
+      var legend = make('legend', 'question-prompt', question.prompt);
+      legend.id = 'question-prompt';
+      fieldset.appendChild(legend);
+      ui.radios = question.options.map(function (option, optionIndex) {
+        var inputId = 'answer-option-' + optionIndex;
+        var label = make('label', 'option');
+        label.htmlFor = inputId;
+        var input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'answer';
+        input.id = inputId;
+        input.value = String(optionIndex);
+        input.checked = response.selected === optionIndex;
+        input.disabled = response.checked;
+        input.addEventListener('change', function () { selectAnswer(optionIndex); });
+        var body = make('span', 'option-body');
+        body.append(make('span', 'option-letter', LETTERS[optionIndex] + '.'), ' ', make('span', 'option-text', option));
+        if (response.checked && optionIndex === question.answer) {
+          label.classList.add('option-correct');
+          body.appendChild(make('span', 'option-tag', 'Correct answer'));
+        } else if (response.checked && optionIndex === response.selected) {
+          label.classList.add('option-incorrect');
+          body.appendChild(make('span', 'option-tag', 'Your answer'));
+        }
+        label.append(input, body);
+        fieldset.appendChild(label);
+        return input;
+      });
+      ui.questionArea.replaceChildren(fieldset);
+
+      hideValidation();
+      renderFeedback(question, response);
+
+      var allChecked = done === total;
+      ui.btnPrev.hidden = index === 0;
+      ui.btnCheck.hidden = response.checked;
+      ui.btnNext.hidden = !response.checked || index === total - 1;
+      ui.btnFinish.hidden = !allChecked;
+    }
+
+    function renderFeedback(question, response) {
+      if (!response.checked) {
+        ui.feedback.className = 'feedback';
+        ui.feedback.replaceChildren();
+        ui.feedback.hidden = true;
+        return;
+      }
+      var correct = response.selected === question.answer;
+      ui.feedback.className = 'feedback ' + (correct ? 'feedback-correct' : 'feedback-incorrect');
+      var verdict = make('p', 'feedback-verdict');
+      verdict.appendChild(make('strong', null, correct ? 'Correct.' : 'Incorrect.'));
+      var parts = [verdict];
+      if (!correct) parts.push(make('p', 'feedback-selected', 'Your answer: ' + optionText(question, response.selected)));
+      parts.push(
+        make('p', 'feedback-answer', 'Correct answer: ' + optionText(question, question.answer)),
+        make('p', 'feedback-explanation', 'Explanation: ' + question.explanation),
+        make('p', 'feedback-source', 'Lesson reference: slide ' + question.sourceSlides.join(', '))
+      );
+      ui.feedback.replaceChildren.apply(ui.feedback, parts);
+      ui.feedback.hidden = false;
+    }
+
+    function selectAnswer(index) {
+      var attempt = state.attempt;
+      if (state.view !== 'quiz' || !attempt) return false;
+      var response = attempt.responses[attempt.current];
+      if (response.checked || !Number.isInteger(index) || index < 0 || index > 3) {
+        ui.radios.forEach(function (radio, radioIndex) { radio.checked = response.selected === radioIndex; });
+        return false;
+      }
+      response.selected = index;
+      ui.radios.forEach(function (radio, radioIndex) { radio.checked = radioIndex === index; });
+      hideValidation();
+      return true;
+    }
+
+    function checkAnswer() {
+      var attempt = state.attempt;
+      if (state.view !== 'quiz' || !attempt) return false;
+      var response = attempt.responses[attempt.current];
+      if (response.checked) return false;
+      if (response.selected === null) {
+        showValidation('Select an answer before pressing Check answer.');
+        return false;
+      }
+      response.checked = true;
+      renderQuestion();
+      ui.feedback.focus();
+      return true;
+    }
+
+    function goToQuestion(index) {
+      var attempt = state.attempt;
+      if (state.view !== 'quiz' || !attempt || !Number.isInteger(index)) return false;
+      if (index < 0 || index >= attempt.questions.length) return false;
+      var limit = firstUncheckedIndex(attempt);
+      if (limit !== -1 && index > limit) return false;
+      attempt.current = index;
+      renderQuestion();
+      ui.questionHeading.focus();
+      return true;
+    }
+
+    function finishQuiz() {
+      var attempt = state.attempt;
+      if (state.view !== 'quiz' || !attempt) return false;
+      if (firstUncheckedIndex(attempt) !== -1) {
+        showValidation('Check all ' + attempt.questions.length + ' answers before viewing results.');
+        return false;
+      }
+      state.results = computeResults(attempt);
+      renderResults(state.results);
+      showView('results');
+      ui.resultsHeading.focus();
+      return true;
+    }
+
+    function retakeQuiz() {
+      var mode = state.attempt ? state.attempt.mode : null;
+      if (!mode) return false;
+      return startQuiz(mode);
+    }
+
+    function resetToDifficulty() {
+      if (!state.available) return false;
+      state.attempt = null;
+      state.results = null;
+      showView('landing');
+      setStudyConfirmed(state.studyConfirmed);
+      ui.difficultyHeading.focus();
+      return true;
+    }
+
+    // ----- Results -----
+
+    function renderResults(results) {
+      ui.resultsHeading.textContent = MODE_LABELS[results.mode] + ' examination results';
+
+      var score = make('p', 'results-score');
+      score.append(make('strong', null, 'Score: '), results.score + ' of ' + results.total + ' correct (' + results.percentage + '%)');
+      var band = make('p', 'results-band');
+      band.append(make('strong', null, 'Mastery band: '), results.band.name + '. ' + results.band.description);
+      ui.resultsSummary.replaceChildren(score, band);
+
+      var rows = results.categories.map(function (entry) {
+        var row = document.createElement('tr');
+        var name = make('th', null, entry.category);
+        name.setAttribute('scope', 'row');
+        row.append(name, make('td', null, entry.correct + ' of ' + entry.total + ' (' + entry.percentage + '%)'), make('td', null, entry.status));
+        return row;
+      });
+      ui.resultsCategories.replaceChildren.apply(ui.resultsCategories, rows);
+
+      renderTopicList(ui.resultsStrengths, results.categories.filter(function (entry) { return entry.status === 'Strength'; }), 'No topic reached 75% in this attempt.');
+      renderTopicList(ui.resultsGaps, results.categories.filter(function (entry) { return entry.status === 'Gap'; }), 'No gaps in this attempt. Keep studying the complete lesson.');
+
+      var items = results.review.map(function (entry) {
+        var question = entry.question;
+        var item = make('li', 'review-item ' + (entry.correct ? 'review-correct' : 'review-incorrect'));
+        item.append(
+          make('h4', null, 'Question ' + entry.number + ': ' + (entry.correct ? 'Correct' : 'Incorrect')),
+          make('p', 'review-topic', 'Topic: ' + question.category),
+          make('p', 'review-prompt', question.prompt),
+          make('p', 'review-selected', 'Your answer: ' + optionText(question, entry.selected)),
+          make('p', 'review-answer', 'Correct answer: ' + optionText(question, question.answer)),
+          make('p', 'review-explanation', 'Explanation: ' + question.explanation),
+          make('p', 'review-source', 'Lesson reference: slide ' + question.sourceSlides.join(', '))
+        );
+        return item;
+      });
+      ui.resultsReview.replaceChildren.apply(ui.resultsReview, items);
+    }
+
+    function renderTopicList(list, entries, emptyText) {
+      if (!entries.length) {
+        list.replaceChildren(make('li', 'topic-empty', emptyText));
+        return;
+      }
+      list.replaceChildren.apply(list, entries.map(function (entry) {
+        return make('li', null, entry.category + ': ' + entry.correct + ' of ' + entry.total + ' correct');
+      }));
+    }
+
+    // ----- Startup -----
+
+    function readBanks() {
+      var banks = {};
+      var errors = [];
+      MODES.forEach(function (mode) {
+        var element = byId('questions-' + mode);
+        if (!element) {
+          errors.push(mode + ' bank data is missing');
+          return;
+        }
+        try {
+          banks[mode] = JSON.parse(element.textContent);
+        } catch (error) {
+          errors.push(mode + ' bank data is not valid JSON');
+        }
+      });
+      return { banks: banks, errors: errors };
+    }
+
+    function init() {
+      var loaded = readBanks();
+      var validation = validateBanks(loaded.banks);
+      state.errors = loaded.errors.concat(validation.errors);
+      state.available = state.errors.length === 0;
+
+      if (!state.available) {
+        state.banks = null;
+        ui.studyConfirm.checked = false;
+        ui.studyConfirm.disabled = true;
+        MODES.forEach(function (mode) { ui.modeButtons[mode].disabled = true; });
+        showView('unavailable');
+        console.error('Field Artillery Mastery Quiz is unavailable: ' + state.errors.join('; '));
+        return;
+      }
+
+      state.banks = deepFreeze(loaded.banks);
+      ui.studyConfirm.addEventListener('change', function () { setStudyConfirmed(ui.studyConfirm.checked); });
+      MODES.forEach(function (mode) {
+        ui.modeButtons[mode].addEventListener('click', function () { startQuiz(mode); });
+      });
+      ui.btnCheck.addEventListener('click', checkAnswer);
+      ui.btnPrev.addEventListener('click', function () { if (state.attempt) goToQuestion(state.attempt.current - 1); });
+      ui.btnNext.addEventListener('click', function () { if (state.attempt) goToQuestion(state.attempt.current + 1); });
+      ui.btnFinish.addEventListener('click', finishQuiz);
+      ui.btnPrint.addEventListener('click', function () { window.print(); });
+      ui.btnRetake.addEventListener('click', retakeQuiz);
+      ui.btnChoose.addEventListener('click', resetToDifficulty);
+
+      showView('landing');
+      setStudyConfirmed(false);
+    }
+
+    function getState() {
+      return JSON.parse(JSON.stringify({
+        available: state.available,
+        errors: state.errors,
+        studyConfirmed: state.studyConfirmed,
+        view: state.view,
+        attempt: state.attempt,
+        results: state.results
+      }));
+    }
+
+    init();
+
+    globalThis.__artilleryQuiz = Object.freeze({
+      validateBanks: validateBanks,
+      shuffleQuestions: shuffleQuestions,
+      createAttempt: createAttempt,
+      computeResults: computeResults,
+      masteryBand: masteryBand,
+      setStudyConfirmed: setStudyConfirmed,
+      startQuiz: startQuiz,
+      selectAnswer: selectAnswer,
+      checkAnswer: checkAnswer,
+      goToQuestion: goToQuestion,
+      finishQuiz: finishQuiz,
+      retakeQuiz: retakeQuiz,
+      resetToDifficulty: resetToDifficulty,
+      getState: getState,
+      getBanks: function () { return state.banks; },
+      setRandom: function (random) { state.random = typeof random === 'function' ? random : Math.random; }
+    });
+  })();
+  </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const buildPath = join(projectRoot, 'scripts', 'build.mjs');
@@ -361,6 +362,705 @@ await test('Every required coverage tag appears across the 75-question bank', ()
   const allTags = new Set([...easyBank, ...mediumBank, ...hardBank].flatMap(item => item.tags));
   const missing = REQUIRED_TAGS.filter(tag => !allTags.has(tag));
   assert.deepEqual(missing, [], `Coverage tags missing: ${missing.join(', ')}`);
+});
+
+// ---------------------------------------------------------------------------
+// Application interaction contracts (Task 5)
+//
+// The app script is taken from the BUILT index.html and executed with node:vm
+// against a small fake DOM built by parsing that same index.html, so these
+// tests exercise the real shipped markup and code rather than a copy.
+// ---------------------------------------------------------------------------
+
+const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+const RAW_TEXT_ELEMENTS = new Set(['script', 'style']);
+const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', middot: '·', hellip: '…', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”' };
+
+function decodeEntities(text) {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code) => {
+    if (code[0] === '#') {
+      const value = code[1].toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+      return String.fromCodePoint(value);
+    }
+    return NAMED_ENTITIES[code.toLowerCase()] ?? match;
+  });
+}
+
+class FakeText {
+  constructor(text) {
+    this.nodeType = 3;
+    this.data = String(text);
+    this.parentNode = null;
+  }
+  get textContent() { return this.data; }
+  set textContent(value) { this.data = String(value); }
+}
+
+class FakeClassList {
+  constructor(element) { this.element = element; }
+  values() { return (this.element.getAttribute('class') ?? '').split(/\s+/).filter(Boolean); }
+  contains(name) { return this.values().includes(name); }
+  add(...names) { this.element.setAttribute('class', [...new Set([...this.values(), ...names])].join(' ')); }
+  remove(...names) { this.element.setAttribute('class', this.values().filter(name => !names.includes(name)).join(' ')); }
+  toggle(name, force) {
+    const on = force === undefined ? !this.contains(name) : Boolean(force);
+    if (on) this.add(name); else this.remove(name);
+    return on;
+  }
+}
+
+function reflectAttribute(name, attribute = name) {
+  return {
+    get() { return this.getAttribute(attribute) ?? ''; },
+    set(value) { this.setAttribute(attribute, value); },
+  };
+}
+
+function reflectBoolean(attribute) {
+  return {
+    get() { return this.hasAttribute(attribute); },
+    set(value) { if (value) this.setAttribute(attribute, ''); else this.removeAttribute(attribute); },
+  };
+}
+
+class FakeElement {
+  constructor(tagName, ownerDocument) {
+    this.nodeType = 1;
+    this.localName = tagName.toLowerCase();
+    this.tagName = tagName.toUpperCase();
+    this.ownerDocument = ownerDocument;
+    this.childNodes = [];
+    this.parentNode = null;
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.checkedState = null;
+    this.classList = new FakeClassList(this);
+  }
+  get children() { return this.childNodes.filter(node => node.nodeType === 1); }
+  getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null; }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  hasAttribute(name) { return this.attributes.has(name); }
+  get type() {
+    return (this.getAttribute('type') ?? (this.localName === 'button' ? 'submit' : 'text')).toLowerCase();
+  }
+  set type(value) { this.setAttribute('type', value); }
+  get checked() { return this.checkedState ?? this.hasAttribute('checked'); }
+  set checked(value) { this.checkedState = Boolean(value); }
+  get textContent() { return this.childNodes.map(node => node.textContent).join(''); }
+  set textContent(value) {
+    this.replaceChildren();
+    if (String(value) !== '') this.appendChild(new FakeText(value));
+  }
+  appendChild(node) {
+    if (node.parentNode) node.parentNode.removeChild(node);
+    node.parentNode = this;
+    this.childNodes.push(node);
+    return node;
+  }
+  append(...nodes) {
+    for (const node of nodes) this.appendChild(typeof node === 'string' ? new FakeText(node) : node);
+  }
+  removeChild(node) {
+    const index = this.childNodes.indexOf(node);
+    if (index === -1) throw new Error('removeChild: not a child');
+    this.childNodes.splice(index, 1);
+    node.parentNode = null;
+    return node;
+  }
+  replaceChildren(...nodes) {
+    for (const node of this.childNodes) node.parentNode = null;
+    this.childNodes = [];
+    this.append(...nodes);
+  }
+  remove() { if (this.parentNode) this.parentNode.removeChild(this); }
+  addEventListener(type, listener) {
+    if (!this.listeners.has(type)) this.listeners.set(type, []);
+    this.listeners.get(type).push(listener);
+  }
+  removeEventListener(type, listener) {
+    const list = this.listeners.get(type) ?? [];
+    const index = list.indexOf(listener);
+    if (index !== -1) list.splice(index, 1);
+  }
+  dispatchEvent(event) {
+    if (!event.target) event.target = this;
+    event.currentTarget = this;
+    for (const listener of [...(this.listeners.get(event.type) ?? [])]) listener.call(this, event);
+    return !event.defaultPrevented;
+  }
+  click() {
+    if (this.disabled) return;
+    const event = type => ({ type, target: this, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } });
+    if (this.localName === 'input' && this.type === 'checkbox') {
+      this.checked = !this.checked;
+      this.dispatchEvent(event('click'));
+      this.dispatchEvent(event('input'));
+      this.dispatchEvent(event('change'));
+      return;
+    }
+    if (this.localName === 'input' && this.type === 'radio') {
+      const wasChecked = this.checked;
+      if (!wasChecked) {
+        for (const other of findAll(this.ownerDocument.root, node => node.localName === 'input' && node.type === 'radio' && node.name === this.name)) {
+          other.checked = false;
+        }
+        this.checked = true;
+      }
+      this.dispatchEvent(event('click'));
+      if (!wasChecked) {
+        this.dispatchEvent(event('input'));
+        this.dispatchEvent(event('change'));
+      }
+      return;
+    }
+    this.dispatchEvent(event('click'));
+  }
+  focus() {
+    // Mirror browsers: hidden or non-focusable elements silently ignore focus().
+    if (!isShown(this)) return;
+    const interactive = ['button', 'input', 'select', 'textarea'].includes(this.localName) && !this.disabled;
+    if (!interactive && !this.hasAttribute('tabindex')) return;
+    this.ownerDocument.activeElement = this;
+  }
+}
+
+Object.defineProperties(FakeElement.prototype, {
+  id: reflectAttribute('id'),
+  className: reflectAttribute('className', 'class'),
+  name: reflectAttribute('name'),
+  value: reflectAttribute('value'),
+  htmlFor: reflectAttribute('htmlFor', 'for'),
+  hidden: reflectBoolean('hidden'),
+  disabled: reflectBoolean('disabled'),
+  tabIndex: {
+    get() { return Number(this.getAttribute('tabindex') ?? 0); },
+    set(value) { this.setAttribute('tabindex', value); },
+  },
+});
+
+class FakeDocument {
+  constructor() {
+    this.root = new FakeElement('#document', this);
+    this.activeElement = null;
+  }
+  createElement(tagName) { return new FakeElement(tagName, this); }
+  createTextNode(text) { return new FakeText(text); }
+  getElementById(id) { return findAll(this.root, node => node.getAttribute('id') === id)[0] ?? null; }
+}
+
+function findAll(root, predicate) {
+  const found = [];
+  const visit = node => {
+    for (const child of node.childNodes) {
+      if (child.nodeType !== 1) continue;
+      if (predicate(child)) found.push(child);
+      visit(child);
+    }
+  };
+  visit(root);
+  return found;
+}
+
+function isShown(node) {
+  for (let current = node; current; current = current.parentNode) {
+    if (current.nodeType === 1 && current.hasAttribute('hidden')) return false;
+  }
+  return true;
+}
+
+function parseHtml(html) {
+  const document = new FakeDocument();
+  const stack = [document.root];
+  const tagPattern = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([a-zA-Z][\w:-]*)\s*>|<([a-zA-Z][\w:-]*)((?:\s+[^\s=>/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/gi;
+  const attributePattern = /([^\s=>/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let cursor = 0;
+  let match;
+  while ((match = tagPattern.exec(html))) {
+    if (match.index > cursor) stack.at(-1).appendChild(new FakeText(decodeEntities(html.slice(cursor, match.index))));
+    cursor = tagPattern.lastIndex;
+    const [whole, closingName, openingName, attributeText = '', selfClosing] = match;
+    if (whole.startsWith('<!')) continue;
+    if (closingName) {
+      const name = closingName.toLowerCase();
+      const index = stack.findLastIndex(node => node.localName === name);
+      if (index > 0) stack.length = index;
+      continue;
+    }
+    const element = document.createElement(openingName);
+    for (const [, name, doubleQuoted, singleQuoted, bare] of attributeText.matchAll(attributePattern)) {
+      element.setAttribute(name.toLowerCase(), decodeEntities(doubleQuoted ?? singleQuoted ?? bare ?? ''));
+    }
+    stack.at(-1).appendChild(element);
+    if (RAW_TEXT_ELEMENTS.has(element.localName)) {
+      const end = html.toLowerCase().indexOf(`</${element.localName}`, cursor);
+      if (end === -1) throw new Error(`Unclosed <${element.localName}>`);
+      element.appendChild(new FakeText(html.slice(cursor, end)));
+      tagPattern.lastIndex = html.indexOf('>', end) + 1;
+      cursor = tagPattern.lastIndex;
+    } else if (!VOID_ELEMENTS.has(element.localName) && !selfClosing) {
+      stack.push(element);
+    }
+  }
+  if (cursor < html.length) stack.at(-1).appendChild(new FakeText(decodeEntities(html.slice(cursor))));
+  return document;
+}
+
+const builtHtml = readFileSync(join(projectRoot, 'index.html'), 'utf8');
+
+function appScripts(document) {
+  return findAll(document.root, node => node.localName === 'script' && !/json/i.test(node.getAttribute('type') ?? ''));
+}
+
+function loadApp(html = builtHtml) {
+  const document = parseHtml(html);
+  const printCalls = [];
+  const consoleErrors = [];
+  const sandbox = {
+    document,
+    console: { log() {}, info() {}, warn() {}, error: (...args) => consoleErrors.push(args.map(String).join(' ')) },
+    print: () => printCalls.push(Date.now()),
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  for (const script of appScripts(document)) {
+    vm.runInContext(script.textContent, sandbox, { filename: 'index.html' });
+  }
+  const api = sandbox.__artilleryQuiz;
+  assert.ok(api, 'index.html must expose globalThis.__artilleryQuiz');
+  return { document, api, printCalls, consoleErrors };
+}
+
+function byId(app, id) {
+  const node = app.document.getElementById(id);
+  assert.ok(node, `index.html must contain #${id}`);
+  return node;
+}
+
+const plain = value => JSON.parse(JSON.stringify(value));
+const MODES = ['easy', 'medium', 'hard'];
+const LETTERS = ['A', 'B', 'C', 'D'];
+const sourceBanks = { easy: easyBank, medium: mediumBank, hard: hardBank };
+
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function attemptOf(app) {
+  const { attempt } = plain(app.api.getState());
+  assert.ok(attempt, 'an attempt must be active');
+  return attempt;
+}
+
+function modeButtons(app) {
+  return MODES.map(mode => byId(app, `mode-${mode}`));
+}
+
+function radios(app) {
+  return findAll(byId(app, 'question-area'), node => node.localName === 'input' && node.type === 'radio');
+}
+
+function startConfirmed(app, mode = 'easy') {
+  byId(app, 'study-confirm').click();
+  byId(app, `mode-${mode}`).click();
+  assert.equal(plain(app.api.getState()).view, 'quiz', `${mode} must start after confirmation`);
+}
+
+// Answers every remaining question through the real controls; chooseCorrect(index) decides each answer.
+function completeAttempt(app, chooseCorrect = () => true) {
+  for (let index = 0; index < 25; index++) {
+    const attempt = attemptOf(app);
+    assert.equal(attempt.current, index);
+    const question = attempt.questions[index];
+    const choice = chooseCorrect(index) ? question.answer : (question.answer + 1) % 4;
+    radios(app)[choice].click();
+    byId(app, 'btn-check').click();
+    if (index < 24) byId(app, 'btn-next').click();
+  }
+}
+
+function replaceBank(html, mode, content) {
+  const pattern = new RegExp(`(<script type="application/json" id="questions-${mode}">)[\\s\\S]*?(</script>)`);
+  assert.match(html, pattern);
+  return html.replace(pattern, (_, open, close) => `${open}${content}${close}`);
+}
+
+await test('index.html is a fresh build of the template and banks', async () => {
+  const { buildHtml } = await import('./build.mjs');
+  const template = readFileSync(join(projectRoot, 'src', 'template.html'), 'utf8');
+  assert.equal(builtHtml, buildHtml(template, sourceBanks), 'run node scripts/build.mjs before verifying');
+});
+
+await test('App exposes the quiz engine through globalThis.__artilleryQuiz', () => {
+  const { api } = loadApp();
+  for (const name of ['validateBanks', 'shuffleQuestions', 'createAttempt', 'setStudyConfirmed', 'startQuiz', 'selectAnswer', 'checkAnswer', 'goToQuestion', 'finishQuiz', 'retakeQuiz', 'resetToDifficulty', 'masteryBand', 'getState', 'getBanks', 'setRandom']) {
+    assert.equal(typeof api[name], 'function', `${name} must be exposed`);
+  }
+  const state = plain(api.getState());
+  assert.equal(state.available, true);
+  assert.equal(state.view, 'landing');
+});
+
+await test('Study warning shows the exact confirmation text and all mode buttons start disabled', () => {
+  const app = loadApp();
+  const checkbox = byId(app, 'study-confirm');
+  assert.equal(checkbox.localName, 'input');
+  assert.equal(checkbox.type, 'checkbox');
+  assert.equal(checkbox.checked, false);
+  const label = findAll(app.document.root, node => node.localName === 'label' && (node.htmlFor === 'study-confirm' || node.children.includes(checkbox)))[0];
+  assert.ok(label, 'the checkbox must have a label');
+  assert.equal(label.textContent.replace(/\s+/g, ' ').trim(), 'I understand that I must study the complete lesson and not rely only on this mock examination.');
+  assert.ok(isShown(byId(app, 'view-landing')));
+  for (const button of modeButtons(app)) {
+    assert.equal(button.localName, 'button');
+    assert.equal(button.disabled, true, `${button.id} must start disabled`);
+  }
+});
+
+await test('Checking the warning enables the mode buttons and unchecking disables them again', () => {
+  const app = loadApp();
+  const checkbox = byId(app, 'study-confirm');
+  byId(app, 'mode-easy').click();
+  assert.equal(plain(app.api.getState()).view, 'landing', 'a disabled button must not start the quiz');
+  assert.equal(app.api.startQuiz('easy'), false, 'startQuiz must refuse before confirmation');
+  assert.equal(isShown(byId(app, 'view-quiz')), false);
+
+  checkbox.click();
+  assert.equal(plain(app.api.getState()).studyConfirmed, true);
+  for (const button of modeButtons(app)) assert.equal(button.disabled, false, `${button.id} must enable`);
+
+  checkbox.click();
+  assert.equal(plain(app.api.getState()).studyConfirmed, false);
+  for (const button of modeButtons(app)) assert.equal(button.disabled, true, `${button.id} must disable again`);
+  assert.equal(app.api.startQuiz('medium'), false);
+
+  app.api.setStudyConfirmed(true);
+  assert.equal(checkbox.checked, true, 'setStudyConfirmed keeps the checkbox in sync');
+  for (const button of modeButtons(app)) assert.equal(button.disabled, false);
+  app.api.setStudyConfirmed(false);
+  assert.equal(checkbox.checked, false);
+  for (const button of modeButtons(app)) assert.equal(button.disabled, true);
+});
+
+await test('Each difficulty loads only its own 25 questions', () => {
+  for (const mode of MODES) {
+    const app = loadApp();
+    startConfirmed(app, mode);
+    const attempt = attemptOf(app);
+    assert.equal(attempt.mode, mode);
+    assert.equal(attempt.questions.length, 25);
+    assert.ok(attempt.questions.every(item => item.difficulty === mode), `${mode} attempt mixed difficulties`);
+    assert.deepEqual(attempt.questions.map(item => item.id).sort((a, b) => a - b), Array.from({ length: 25 }, (_, index) => index + 1));
+    assert.deepEqual(new Set(attempt.questions.map(item => item.prompt)), new Set(sourceBanks[mode].map(item => item.prompt)));
+    assert.deepEqual(attempt.questions, attempt.questions.map(item => sourceBanks[mode].find(source => source.id === item.id)), 'authored question and choice order must be preserved');
+    assert.equal(byId(app, 'question-prompt').textContent, attempt.questions[0].prompt);
+  }
+});
+
+await test('Starting a quiz renders the first question as a fieldset with four radio choices and moves focus to it', () => {
+  const app = loadApp();
+  startConfirmed(app, 'hard');
+  const attempt = attemptOf(app);
+  assert.ok(isShown(byId(app, 'view-quiz')));
+  assert.equal(isShown(byId(app, 'view-landing')), false);
+  assert.equal(app.document.activeElement?.id, 'question-heading');
+  assert.match(byId(app, 'question-heading').textContent, /Question 1 of 25/);
+  const legend = byId(app, 'question-prompt');
+  assert.equal(legend.localName, 'legend');
+  assert.equal(legend.parentNode.localName, 'fieldset');
+  const choices = radios(app);
+  assert.equal(choices.length, 4);
+  assert.equal(new Set(choices.map(choice => choice.name)).size, 1);
+  choices.forEach((choice, index) => {
+    const label = findAll(app.document.root, node => node.localName === 'label' && (node.htmlFor === choice.id || node.children.includes(choice)))[0];
+    assert.ok(label, `choice ${index} must be labelled`);
+    assert.ok(label.textContent.includes(attempt.questions[0].options[index]));
+    assert.ok(label.textContent.includes(`${LETTERS[index]}.`));
+  });
+  const status = byId(app, 'quiz-status');
+  assert.ok(status.getAttribute('role') === 'status' || status.getAttribute('aria-live'), 'quiz status must be a live region');
+  assert.equal(byId(app, 'quiz-progress').localName, 'progress');
+});
+
+await test('Fisher-Yates shuffle matches a hand-checked order and copies the source', () => {
+  const { api } = loadApp();
+  const source = ['a', 'b', 'c', 'd', 'e'];
+  const draws = [0.1, 0.9, 0.5, 0.0];
+  // i=4: j=floor(0.1*5)=0 -> e b c d a; i=3: j=floor(0.9*4)=3 -> unchanged;
+  // i=2: j=floor(0.5*3)=1 -> e c b d a; i=1: j=floor(0.0*2)=0 -> c e b d a
+  const shuffled = api.shuffleQuestions(source, () => draws.shift());
+  assert.deepEqual(plain(shuffled), ['c', 'e', 'b', 'd', 'a']);
+  assert.deepEqual(source, ['a', 'b', 'c', 'd', 'e'], 'source must not be mutated');
+  assert.notEqual(shuffled, source);
+  assert.equal(draws.length, 0, 'exactly n-1 random draws');
+  const defaultShuffle = plain(api.shuffleQuestions(source));
+  assert.deepEqual([...defaultShuffle].sort(), source);
+
+  const attempt = plain(api.createAttempt('medium', sourceBanks, seededRandom(3)));
+  assert.equal(attempt.mode, 'medium');
+  assert.deepEqual(attempt.questions, plain(api.shuffleQuestions(mediumBank, seededRandom(3))));
+  assert.equal(attempt.current, 0);
+  assert.ok(attempt.responses.length === 25 && attempt.responses.every(response => response.selected === null && response.checked === false));
+});
+
+await test('Source banks stay unchanged while three retakes each reshuffle the same difficulty', () => {
+  const app = loadApp();
+  const snapshot = JSON.stringify(app.api.getBanks());
+  assert.equal(snapshot, JSON.stringify(sourceBanks));
+  app.api.setRandom(seededRandom(7));
+  startConfirmed(app, 'medium');
+  let previousOrder = attemptOf(app).questions.map(item => item.id);
+  for (let retake = 1; retake <= 3; retake++) {
+    completeAttempt(app);
+    byId(app, 'btn-finish').click();
+    assert.equal(plain(app.api.getState()).view, 'results');
+    byId(app, 'btn-retake').click();
+    const attempt = attemptOf(app);
+    assert.equal(attempt.mode, 'medium', `retake ${retake} keeps the difficulty`);
+    assert.ok(attempt.responses.every(response => response.selected === null && !response.checked), `retake ${retake} starts clean`);
+    const order = attempt.questions.map(item => item.id);
+    assert.notDeepEqual(order, previousOrder, `retake ${retake} must reshuffle`);
+    assert.equal(JSON.stringify(app.api.getBanks()), snapshot, `source banks changed after retake ${retake}`);
+    assert.equal(app.document.activeElement?.id, 'question-heading');
+    previousOrder = order;
+  }
+});
+
+await test('Question order and recorded answers stay stable during navigation', () => {
+  const app = loadApp();
+  startConfirmed(app, 'easy');
+  const order = attemptOf(app).questions.map(item => item.id);
+  for (let index = 0; index < 5; index++) {
+    radios(app)[index % 4].click();
+    byId(app, 'btn-check').click();
+    byId(app, 'btn-next').click();
+  }
+  assert.equal(attemptOf(app).current, 5);
+  assert.equal(app.api.goToQuestion(7), false, 'cannot skip past the first unchecked question');
+  assert.equal(app.api.goToQuestion(-1), false);
+  assert.equal(app.api.goToQuestion(1), true);
+  assert.equal(app.document.activeElement?.id, 'question-heading');
+  assert.equal(radios(app)[1].checked, true, 'recorded answer shows on revisit');
+  assert.ok(radios(app).every(choice => choice.disabled), 'revisited checked question stays locked');
+  assert.ok(isShown(byId(app, 'answer-feedback')), 'feedback stays reviewable');
+  byId(app, 'btn-prev').click();
+  assert.equal(attemptOf(app).current, 0);
+  assert.equal(isShown(byId(app, 'btn-prev')), false, 'no previous button on question 1');
+  assert.equal(app.api.goToQuestion(5), true);
+  const attempt = attemptOf(app);
+  assert.deepEqual(attempt.questions.map(item => item.id), order);
+  assert.deepEqual(attempt.responses.slice(0, 5).map(response => [response.selected, response.checked]), [[0, true], [1, true], [2, true], [3, true], [0, true]]);
+  assert.deepEqual([attempt.responses[5].selected, attempt.responses[5].checked], [null, false]);
+});
+
+await test('Check answer with no selection shows a validation message and does not advance', () => {
+  const app = loadApp();
+  startConfirmed(app, 'easy');
+  const validation = byId(app, 'validation-message');
+  assert.equal(isShown(validation), false);
+  byId(app, 'btn-check').click();
+  assert.equal(app.api.checkAnswer(), false);
+  const attempt = attemptOf(app);
+  assert.equal(attempt.current, 0);
+  assert.equal(attempt.responses[0].checked, false);
+  assert.ok(isShown(validation));
+  assert.match(validation.textContent, /select an answer/i);
+  assert.ok(validation.getAttribute('role') === 'alert' || validation.getAttribute('aria-live'));
+  assert.equal(app.document.activeElement?.id, 'validation-message');
+  assert.equal(isShown(byId(app, 'btn-next')), false);
+  assert.equal(isShown(byId(app, 'answer-feedback')), false);
+  radios(app)[2].click();
+  assert.equal(isShown(validation), false, 'selecting clears the validation message');
+});
+
+await test('Checked answers lock and cannot be changed', () => {
+  const app = loadApp();
+  startConfirmed(app, 'hard');
+  const question = attemptOf(app).questions[0];
+  const wrong = (question.answer + 1) % 4;
+  radios(app)[wrong].click();
+  assert.equal(app.api.checkAnswer(), true);
+  assert.equal(app.api.selectAnswer(question.answer), false);
+  radios(app)[question.answer].click();
+  assert.equal(app.api.checkAnswer(), false, 'a checked answer cannot be checked again');
+  const response = attemptOf(app).responses[0];
+  assert.deepEqual([response.selected, response.checked], [wrong, true]);
+  assert.ok(radios(app).every(choice => choice.disabled));
+  assert.equal(radios(app)[wrong].checked, true);
+  assert.equal(isShown(byId(app, 'btn-check')), false);
+});
+
+await test('Checking reveals the correct answer and explanation and focuses the feedback', () => {
+  const app = loadApp();
+  startConfirmed(app, 'easy');
+  const [first, second] = attemptOf(app).questions;
+  const wrong = (first.answer + 3) % 4;
+  radios(app)[wrong].click();
+  byId(app, 'btn-check').click();
+  const feedback = byId(app, 'answer-feedback');
+  assert.ok(isShown(feedback));
+  assert.equal(app.document.activeElement?.id, 'answer-feedback');
+  const text = feedback.textContent;
+  assert.match(text, /Incorrect/);
+  assert.ok(text.includes(`Correct answer: ${LETTERS[first.answer]}. ${first.options[first.answer]}`), text);
+  assert.ok(text.includes(`Your answer: ${LETTERS[wrong]}. ${first.options[wrong]}`), text);
+  assert.ok(text.includes(first.explanation));
+  const labels = findAll(byId(app, 'question-area'), node => node.localName === 'label');
+  assert.ok(labels[first.answer].classList.contains('option-correct'));
+  assert.ok(labels[wrong].classList.contains('option-incorrect'));
+  assert.match(labels[first.answer].textContent, /Correct answer/, 'correctness is not conveyed by color alone');
+  assert.equal(plain(app.api.getState()).attempt.current, 0, 'checking does not advance by itself');
+
+  byId(app, 'btn-next').click();
+  radios(app)[second.answer].click();
+  byId(app, 'btn-check').click();
+  assert.match(byId(app, 'answer-feedback').textContent, /^\s*Correct\./);
+  assert.ok(byId(app, 'answer-feedback').textContent.includes(second.explanation));
+});
+
+await test('validateBanks accepts the embedded banks and mirrors the build validator error-for-error', async () => {
+  const { validateQuestion } = await import('./build.mjs');
+  const { api } = loadApp();
+  assert.deepEqual(plain(api.validateBanks(sourceBanks)), { valid: true, errors: [] });
+  const base = easyBank[0];
+  const mutations = [
+    { ...base, id: 1.5 },
+    { ...base, difficulty: 'hard' },
+    { ...base, options: base.options.slice(0, 3) },
+    { ...base, answer: 4 },
+    { ...base, sourceSlides: [14] },
+    { ...base, sourceSlides: [] },
+    { ...base, tags: [''] },
+    { ...base, prompt: '  ' },
+    { ...base, category: 7 },
+    { ...base, explanation: undefined },
+    null,
+    [],
+  ];
+  for (const mutated of mutations) {
+    const result = plain(api.validateBanks({ ...sourceBanks, easy: [mutated, ...easyBank.slice(1)] }));
+    assert.equal(result.valid, false);
+    assert.deepEqual(result.errors, validateQuestion(mutated, 'easy', 1).map(error => `easy question 1: ${error}`));
+  }
+  const short = plain(api.validateBanks({ ...sourceBanks, medium: mediumBank.slice(0, 24) }));
+  assert.equal(short.valid, false);
+  assert.ok(short.errors.some(error => /medium/.test(error) && /25/.test(error)), short.errors.join('; '));
+  const missing = plain(api.validateBanks({ easy: easyBank, medium: mediumBank }));
+  assert.equal(missing.valid, false);
+  assert.ok(missing.errors.some(error => /hard/.test(error)), missing.errors.join('; '));
+});
+
+await test('Malformed or missing startup data shows the unavailable state and blocks every quiz start', () => {
+  const brokenAnswer = plain(hardBank);
+  brokenAnswer[3].answer = 4;
+  const variants = {
+    'unparseable Easy JSON': replaceBank(builtHtml, 'easy', '{not json'),
+    'Medium bank with 24 items': replaceBank(builtHtml, 'medium', JSON.stringify(mediumBank.slice(0, 24))),
+    'Hard answer index out of range': replaceBank(builtHtml, 'hard', JSON.stringify(brokenAnswer)),
+    'missing Easy bank element': builtHtml.replace(/<script type="application\/json" id="questions-easy">[\s\S]*?<\/script>/, ''),
+  };
+  for (const [name, html] of Object.entries(variants)) {
+    const app = loadApp(html);
+    const state = plain(app.api.getState());
+    assert.equal(state.available, false, name);
+    assert.ok(state.errors.length > 0, `${name}: errors must be recorded`);
+    assert.ok(isShown(byId(app, 'view-unavailable')), `${name}: unavailable view must show`);
+    assert.match(byId(app, 'view-unavailable').textContent, /unavailable/i);
+    assert.equal(isShown(byId(app, 'view-landing')), false, `${name}: landing must hide`);
+    assert.equal(byId(app, 'study-confirm').disabled, true, name);
+    app.api.setStudyConfirmed(true);
+    byId(app, 'study-confirm').click();
+    for (const button of modeButtons(app)) assert.equal(button.disabled, true, `${name}: ${button.id}`);
+    for (const mode of MODES) assert.equal(app.api.startQuiz(mode), false, `${name}: ${mode}`);
+    assert.equal(isShown(byId(app, 'view-quiz')), false, name);
+    assert.equal(plain(app.api.getState()).attempt, null, name);
+  }
+  assert.equal(isShown(byId(loadApp(), 'view-unavailable')), false, 'valid data must not show the unavailable state');
+});
+
+await test('Mastery bands use the documented 90/75/60 thresholds', () => {
+  const { api } = loadApp();
+  const cases = [[100, 'Mastery'], [90, 'Mastery'], [89, 'Proficient'], [75, 'Proficient'], [74, 'Developing'], [60, 'Developing'], [59, 'Needs review'], [0, 'Needs review']];
+  for (const [percentage, band] of cases) assert.equal(api.masteryBand(percentage).name, band, `${percentage}%`);
+});
+
+await test('All 25 checked answers produce scored results with topic analysis, full review and actions', () => {
+  const app = loadApp();
+  startConfirmed(app, 'easy');
+  assert.equal(app.api.finishQuiz(), false, 'results are unavailable before every item is checked');
+  assert.equal(isShown(byId(app, 'view-results')), false);
+  const wrongIndexes = new Set([0, 5, 10, 15, 20]);
+  completeAttempt(app, index => !wrongIndexes.has(index));
+  const attempt = attemptOf(app);
+  assert.ok(isShown(byId(app, 'btn-finish')));
+  byId(app, 'btn-finish').click();
+
+  assert.ok(isShown(byId(app, 'view-results')));
+  assert.equal(isShown(byId(app, 'view-quiz')), false);
+  assert.equal(app.document.activeElement?.id, 'results-heading');
+  const summary = byId(app, 'results-summary').textContent;
+  assert.match(summary, /20 of 25/);
+  assert.match(summary, /80%/);
+  assert.match(summary, /Proficient/);
+
+  const expected = new Map();
+  attempt.questions.forEach((item, index) => {
+    const entry = expected.get(item.category) ?? { correct: 0, total: 0 };
+    entry.total++;
+    if (!wrongIndexes.has(index)) entry.correct++;
+    expected.set(item.category, entry);
+  });
+  const rows = findAll(byId(app, 'results-categories-body'), node => node.localName === 'tr');
+  assert.equal(rows.length, expected.size);
+  for (const row of rows) {
+    const [category, count, status] = row.children.map(cell => cell.textContent.trim());
+    const entry = expected.get(category);
+    assert.ok(entry, `unexpected category row ${category}`);
+    assert.ok(count.startsWith(`${entry.correct} of ${entry.total}`), `${category}: ${count}`);
+    assert.equal(status, entry.correct / entry.total >= 0.75 ? 'Strength' : 'Gap');
+  }
+  const strengths = findAll(byId(app, 'results-strengths'), node => node.localName === 'li').map(node => node.textContent);
+  const gaps = findAll(byId(app, 'results-gaps'), node => node.localName === 'li').map(node => node.textContent);
+  for (const [category, entry] of expected) {
+    const list = entry.correct / entry.total >= 0.75 ? strengths : gaps;
+    assert.equal(list.filter(text => text.includes(category)).length, 1, `${category} must be listed once in the right list`);
+  }
+
+  const reviewItems = byId(app, 'results-review').children;
+  assert.equal(reviewItems.length, 25);
+  reviewItems.forEach((item, index) => {
+    const question = attempt.questions[index];
+    const selected = attempt.responses[index].selected;
+    const text = item.textContent;
+    assert.ok(text.includes(question.prompt), `review ${index + 1} prompt`);
+    assert.ok(text.includes(`Your answer: ${LETTERS[selected]}. ${question.options[selected]}`), `review ${index + 1} answer`);
+    assert.ok(text.includes(`Correct answer: ${LETTERS[question.answer]}. ${question.options[question.answer]}`), `review ${index + 1} key`);
+    assert.ok(text.includes(question.explanation), `review ${index + 1} explanation`);
+    assert.match(text, wrongIndexes.has(index) ? /Incorrect/ : /Correct/);
+  });
+
+  byId(app, 'btn-print').click();
+  assert.equal(app.printCalls.length, 1, 'print/save calls window.print');
+  byId(app, 'btn-choose').click();
+  assert.ok(isShown(byId(app, 'view-landing')));
+  assert.equal(isShown(byId(app, 'view-results')), false);
+  assert.equal(plain(app.api.getState()).attempt, null);
+  assert.equal(app.document.activeElement?.id, 'difficulty-heading');
+  for (const button of modeButtons(app)) assert.equal(button.disabled, false, 'confirmation carries over to difficulty choice');
+  byId(app, 'mode-hard').click();
+  assert.equal(attemptOf(app).mode, 'hard');
+});
+
+await test('App keeps answers in memory only and loads no external resources', () => {
+  const document = parseHtml(builtHtml);
+  const code = appScripts(document).map(script => script.textContent).join('\n');
+  assert.ok(code.length > 0, 'index.html must contain the app script');
+  assert.doesNotMatch(code, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie|serviceWorker|\bimport\s*\(/);
+  assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
 });
 
 if (failures > 0) {
