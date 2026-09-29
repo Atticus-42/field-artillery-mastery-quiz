@@ -544,6 +544,7 @@ class FakeDocument {
     this.root = new FakeElement('#document', this);
     this.activeElement = null;
   }
+  get body() { return findAll(this.root, node => node.localName === 'body')[0] ?? null; }
   createElement(tagName) { return new FakeElement(tagName, this); }
   createTextNode(text) { return new FakeText(text); }
   getElementById(id) { return findAll(this.root, node => node.getAttribute('id') === id)[0] ?? null; }
@@ -971,6 +972,7 @@ await test('Malformed or missing startup data shows the unavailable state and bl
     assert.ok(isShown(byId(app, 'view-unavailable')), `${name}: unavailable view must show`);
     assert.match(byId(app, 'view-unavailable').textContent, /unavailable/i);
     assert.equal(isShown(byId(app, 'view-landing')), false, `${name}: landing must hide`);
+    assert.equal(app.document.activeElement?.id, 'unavailable-heading', `${name}: focus must move to the unavailable heading`);
     assert.equal(byId(app, 'study-confirm').disabled, true, name);
     app.api.setStudyConfirmed(true);
     byId(app, 'study-confirm').click();
@@ -1061,6 +1063,221 @@ await test('App keeps answers in memory only and loads no external resources', (
   assert.ok(code.length > 0, 'index.html must contain the app script');
   assert.doesNotMatch(code, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie|serviceWorker|\bimport\s*\(/);
   assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
+});
+
+await test('App script avoids replaceChildren so older Safari (before 14) still renders questions', () => {
+  const code = appScripts(parseHtml(builtHtml)).map(script => script.textContent).join('\n');
+  assert.ok(!/\breplaceChildren\b/.test(code), 'app script must not call replaceChildren');
+});
+
+// ---------------------------------------------------------------------------
+// Visual system contracts (Task 6)
+//
+// A small CSS parser reads the single inline stylesheet of the built page so the
+// tests can assert on real rules: theme classes, focus styles, the mobile
+// breakpoint and full reduced-motion coverage of every animated selector.
+// ---------------------------------------------------------------------------
+
+function stylesheetText(html = builtHtml) {
+  const styles = findAll(parseHtml(html).root, node => node.localName === 'style');
+  assert.equal(styles.length, 1, 'index.html must have exactly one inline <style> element');
+  return styles[0].textContent.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+// Returns flat rules: { selectors: string[], declarations: Map, media: string|null } and keyframe names.
+function parseCss(css) {
+  const rules = [];
+  const keyframes = new Set();
+  const matchingBrace = (text, open) => {
+    let depth = 0;
+    for (let index = open; index < text.length; index++) {
+      if (text[index] === '{') depth++;
+      else if (text[index] === '}' && --depth === 0) return index;
+    }
+    throw new Error('Unbalanced braces in stylesheet');
+  };
+  const parseDeclarations = body => {
+    const declarations = new Map();
+    for (const part of body.split(';')) {
+      const colon = part.indexOf(':');
+      if (colon === -1) continue;
+      declarations.set(part.slice(0, colon).trim().toLowerCase(), part.slice(colon + 1).trim().replace(/\s+/g, ' '));
+    }
+    return declarations;
+  };
+  const walk = (text, media) => {
+    let cursor = 0;
+    while (cursor < text.length) {
+      const open = text.indexOf('{', cursor);
+      if (open === -1) break;
+      const prelude = text.slice(cursor, open).trim();
+      const close = matchingBrace(text, open);
+      const body = text.slice(open + 1, close);
+      if (/^@media\b/i.test(prelude)) {
+        walk(body, prelude.replace(/\s+/g, ' '));
+      } else if (/^@(-webkit-)?keyframes\b/i.test(prelude)) {
+        keyframes.add(prelude.split(/\s+/)[1]);
+      } else if (!prelude.startsWith('@')) {
+        rules.push({ selectors: prelude.split(',').map(selector => selector.trim().replace(/\s+/g, ' ')), declarations: parseDeclarations(body), media });
+      }
+      cursor = close + 1;
+    }
+  };
+  walk(css, null);
+  return { rules, keyframes };
+}
+
+const REDUCED_MOTION_MEDIA = /prefers-reduced-motion:\s*reduce/i;
+const hasMotion = value => value !== undefined && !/^none\b/i.test(value.replace(/\s*!important$/, ''));
+
+await test('Hero artwork is an aria-hidden inline SVG with the howitzer, barrel, muzzle-flash, projectile, smoke and target-grid groups', () => {
+  const document = parseHtml(builtHtml);
+  const svgs = findAll(document.root, node => node.localName === 'svg');
+  assert.ok(svgs.length > 0, 'index.html must contain inline SVG artwork');
+  for (const svg of svgs) {
+    assert.equal(svg.getAttribute('aria-hidden'), 'true', 'decorative SVG must be aria-hidden');
+    assert.equal(svg.getAttribute('focusable'), 'false', 'decorative SVG must not take focus');
+    assert.ok(svg.getAttribute('viewbox'), 'SVG must scale through a viewBox');
+  }
+  const groups = {};
+  for (const id of ['howitzer', 'barrel', 'muzzle-flash', 'projectile', 'smoke', 'target-grid']) {
+    const node = document.getElementById(id);
+    assert.ok(node, `SVG group #${id} is required`);
+    assert.equal(node.localName, 'g', `#${id} must be an SVG <g> group`);
+    assert.ok(svgs.some(svg => findAll(svg, child => child === node).length), `#${id} must sit inside an aria-hidden SVG`);
+    groups[id] = node;
+  }
+  for (const id of ['barrel', 'muzzle-flash']) {
+    assert.ok(findAll(groups.howitzer, node => node === groups[id]).length, `#${id} must be part of #howitzer`);
+  }
+  const hero = document.getElementById('hero-art');
+  assert.ok(hero, 'the landing hero must contain the fire-mission art');
+  assert.match(hero.textContent, /FIRE MISSION/, 'decorative fire-mission labels belong inside the aria-hidden art');
+  assert.ok(findAll(hero, node => node.localName === 'path' && /\btrajectory\b/.test(node.getAttribute('class') ?? '')).length, 'a static projectile arc must be drawn');
+  assert.ok(findAll(hero, node => /\brange-rings\b/.test(node.getAttribute('class') ?? '')).length, 'range rings must be drawn');
+});
+
+await test('Easy, Medium and Hard theme classes are styled and follow the active attempt', () => {
+  const { rules } = parseCss(stylesheetText());
+  for (const mode of MODES) {
+    assert.ok(rules.some(rule => rule.selectors.some(selector => selector.includes(`.theme-${mode}`))), `CSS must style .theme-${mode}`);
+  }
+  const themeClasses = app => MODES.filter(mode => app.document.body.classList.contains(`theme-${mode}`));
+  for (const mode of MODES) {
+    const app = loadApp();
+    assert.ok(app.document.body, 'the page must have a <body>');
+    assert.deepEqual(themeClasses(app), [], 'no theme before a mode starts');
+    assert.equal(app.document.body.getAttribute('data-view'), 'landing');
+    startConfirmed(app, mode);
+    assert.deepEqual(themeClasses(app), [mode], `${mode} applies only theme-${mode}`);
+    assert.equal(app.document.body.getAttribute('data-view'), 'quiz');
+    assert.match(byId(app, 'quiz-heading').textContent, new RegExp(mode, 'i'), 'the difficulty is named in text, not by colour alone');
+    completeAttempt(app);
+    byId(app, 'btn-finish').click();
+    assert.deepEqual(themeClasses(app), [mode], 'results keep the attempt theme');
+    assert.equal(app.document.body.getAttribute('data-view'), 'results');
+    byId(app, 'btn-retake').click();
+    assert.deepEqual(themeClasses(app), [mode], 'retake keeps the same theme');
+    completeAttempt(app);
+    byId(app, 'btn-finish').click();
+    byId(app, 'btn-choose').click();
+    assert.deepEqual(themeClasses(app), [], 'choosing another difficulty clears the theme');
+    assert.equal(app.document.body.getAttribute('data-view'), 'landing');
+    const next = MODES[(MODES.indexOf(mode) + 1) % 3];
+    byId(app, `mode-${next}`).click();
+    assert.deepEqual(themeClasses(app), [next], 'switching difficulty swaps the theme');
+  }
+  const broken = loadApp(replaceBank(builtHtml, 'easy', '{not json'));
+  assert.deepEqual(themeClasses(broken), []);
+  assert.equal(broken.document.body.getAttribute('data-view'), 'unavailable');
+});
+
+await test('Focus stays visible: a :focus-visible outline exists and no rule removes outlines', () => {
+  const { rules } = parseCss(stylesheetText());
+  const focusRules = rules.filter(rule => !rule.media && rule.selectors.some(selector => selector.includes(':focus-visible')));
+  assert.ok(focusRules.length, 'a :focus-visible rule is required');
+  assert.ok(focusRules.some(rule => {
+    const outline = rule.declarations.get('outline') ?? '';
+    const width = Number((outline.match(/(\d+(?:\.\d+)?)px/) ?? [])[1] ?? 0);
+    return width >= 2 && /solid/.test(outline);
+  }), 'focus outline must be solid and at least 2px wide');
+  for (const rule of rules) {
+    const outline = rule.declarations.get('outline');
+    assert.ok(outline === undefined || !/^(none|0)\b/.test(outline), `outline removed by ${rule.selectors.join(', ')}`);
+  }
+});
+
+await test('Hover accents do not replace correct and incorrect feedback styling', () => {
+  const { rules } = parseCss(stylesheetText());
+  const hover = rules.flatMap(rule => rule.selectors
+    .filter(selector => selector.includes('.option:hover') && rule.declarations.has('border-color')));
+  assert.ok(hover.length, 'options need a hover accent');
+  for (const selector of hover) {
+    assert.match(selector, /:not\(\.option-correct\)/, 'hover must preserve correct answer border');
+    assert.match(selector, /:not\(\.option-incorrect\)/, 'hover must preserve incorrect answer border');
+  }
+});
+
+await test('Narrow screens up to 760px stack the hero and controls with 44px targets and wrapping text', () => {
+  const { rules } = parseCss(stylesheetText());
+  const mobile = rules.filter(rule => rule.media && /max-width:\s*760px/.test(rule.media));
+  assert.ok(mobile.length, 'a @media (max-width: 760px) block is required');
+  const stacks = selectorPattern => mobile.some(rule => rule.selectors.some(selector => selectorPattern.test(selector))
+    && (/^1fr$/.test(rule.declarations.get('grid-template-columns') ?? '') || rule.declarations.get('flex-direction') === 'column'));
+  assert.ok(stacks(/\.hero-inner\b/), 'the hero must stack into one column');
+  assert.ok(stacks(/\.quiz-actions\b/) && stacks(/\.results-actions\b/), 'action buttons must stack');
+  const base = selector => rules.find(rule => !rule.media && rule.selectors.includes(selector));
+  for (const selector of ['button', '.option', '.study-confirm']) {
+    assert.equal(base(selector)?.declarations.get('min-height'), '44px', `${selector} keeps a 44px minimum target`);
+  }
+  assert.equal(base('body')?.declarations.get('overflow-wrap'), 'anywhere', 'long answers must wrap');
+  const art = rules.find(rule => !rule.media && rule.selectors.includes('.hero-art svg'));
+  assert.ok(art && art.declarations.get('max-width') === '100%', 'hero SVG must never exceed its column');
+  const terrain = rules.find(rule => !rule.media && rule.selectors.includes('.terrain'));
+  assert.ok(terrain && terrain.declarations.get('position') === 'fixed' && terrain.declarations.get('overflow') === 'hidden' && terrain.declarations.get('pointer-events') === 'none', 'the decorative map layer must not affect layout width or input');
+});
+
+await test('prefers-reduced-motion: reduce sets animation and transition to none on every motion-bearing element', () => {
+  const { rules, keyframes } = parseCss(stylesheetText());
+  const reduced = rules.filter(rule => rule.media && REDUCED_MOTION_MEDIA.test(rule.media));
+  assert.ok(reduced.length, 'a @media (prefers-reduced-motion: reduce) block is required');
+  const stilled = new Set(reduced
+    .filter(rule => /^none\b/.test(rule.declarations.get('animation') ?? '') && /^none\b/.test(rule.declarations.get('transition') ?? ''))
+    .flatMap(rule => rule.selectors));
+  for (const selector of ['#barrel', '#muzzle-flash', '#projectile', '#smoke .smoke-puff', '#target-grid .target-pulse', '.view']) {
+    assert.ok(stilled.has(selector), `reduced motion must set animation: none and transition: none on ${selector}`);
+  }
+  const moving = rules.filter(rule => !(rule.media && REDUCED_MOTION_MEDIA.test(rule.media))
+    && (hasMotion(rule.declarations.get('animation')) || hasMotion(rule.declarations.get('animation-name')) || hasMotion(rule.declarations.get('transition'))));
+  assert.ok(moving.length >= 6, 'the artwork must actually be animated');
+  for (const rule of moving) {
+    for (const selector of rule.selectors) assert.ok(stilled.has(selector), `animated selector ${selector} is not stopped under reduced motion`);
+    const name = (rule.declarations.get('animation') ?? rule.declarations.get('animation-name') ?? '').split(/\s+/).find(token => keyframes.has(token));
+    if (hasMotion(rule.declarations.get('animation')) || rule.declarations.has('animation-name')) assert.ok(name, `${rule.selectors.join(', ')} uses an undefined @keyframes`);
+  }
+  for (const rule of reduced) {
+    for (const selector of rule.selectors) {
+      if (/#howitzer|#target-grid$|\.range-rings|\.trajectory|\.hero-art/.test(selector)) {
+        assert.notEqual(rule.declarations.get('display'), 'none', `static artwork ${selector} must stay visible`);
+        assert.notEqual(rule.declarations.get('visibility'), 'hidden', `static artwork ${selector} must stay visible`);
+      }
+    }
+  }
+});
+
+await test('Visual system uses no external asset URLs, fonts or data URIs', () => {
+  assert.doesNotMatch(builtHtml, /https?:\/\//i, 'no absolute URLs (inline SVG needs no xmlns)');
+  assert.doesNotMatch(builtHtml, /@font-face|data:[a-z]+\//i);
+  const css = stylesheetText();
+  for (const [, target] of css.matchAll(/url\(\s*['"]?([^'")]*)/gi)) {
+    assert.ok(target.startsWith('#'), `stylesheet url(${target}) must reference an inline fragment`);
+  }
+  for (const [, target] of builtHtml.matchAll(/\bhref\s*=\s*"([^"]*)"/gi)) {
+    assert.ok(target.startsWith('#'), `href ${target} must be an in-page fragment`);
+  }
+  const { rules } = parseCss(css);
+  const bodyFont = rules.find(rule => !rule.media && rule.selectors.includes('body'))?.declarations.get('font-family') ?? '';
+  assert.match(bodyFont, /system-ui/, 'body uses a system font stack');
 });
 
 if (failures > 0) {

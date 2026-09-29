@@ -5,25 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Field Artillery Mastery Quiz</title>
   <style>
+    /* Field Artillery Fire Mission palette. Every text pair is WCAG AA (see Task 6 report). */
     :root {
-      --color-bg: #f4f3ec;
-      --color-surface: #ffffff;
+      --color-bg: #e7e8d6;
+      --color-surface: #fbfaf3;
       --color-text: #1d2119;
-      --color-muted: #454b3e;
-      --color-border: #7c8270;
+      --color-muted: #464c3c;
+      --color-border: #7a8068;
       --color-accent: #3f4d22;
+      --color-accent-hover: #2f3a19;
       --color-accent-text: #ffffff;
-      --color-warning-bg: #fff3d1;
-      --color-warning-border: #8a5f00;
+      --color-charcoal: #23281e;
+      --color-olive-deep: #34402a;
+      --color-terrain: #5b6b3a;
+      --color-brass: #e3b65a;
+      --color-hero-text: #f3efdf;
+      --color-hero-muted: #d6d2bf;
+      --color-warning-bg: #fff0c7;
+      --color-warning-border: #9a5a00;
+      --color-warning-text: #7a3e00;
       --color-correct: #1c6530;
       --color-incorrect: #9e2418;
       --color-focus: #1a4fd1;
+      --mode-accent: var(--color-accent);
+      --mode-tint: var(--color-surface);
+      --mode-glow: var(--color-brass);
     }
+    /* Difficulty identities. The difficulty is always also named in text. */
+    .theme-easy, .mode-easy { --mode-accent: #2d6a2f; --mode-tint: #eef1e3; --mode-glow: #8fd17a; }
+    .theme-medium, .mode-medium { --mode-accent: #8a5700; --mode-tint: #f7eed6; --mode-glow: #f2b441; }
+    .theme-hard, .mode-hard { --mode-accent: #a63d17; --mode-tint: #f8e6dc; --mode-glow: #ff8a5c; }
+
     *, *::before, *::after { box-sizing: border-box; }
     [hidden] { display: none !important; }
     html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     body {
       margin: 0;
+      min-height: 100vh;
       background: var(--color-bg);
       color: var(--color-text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -31,11 +49,117 @@
       line-height: 1.5;
       overflow-wrap: anywhere;
     }
-    .site-header, .app { width: 100%; max-width: 52rem; margin: 0 auto; padding: 1rem; }
-    .site-header { padding-bottom: 0; }
-    .eyebrow { margin: 0; font-weight: 600; color: var(--color-muted); }
     h1, h2, h3, h4 { line-height: 1.25; }
-    h1 { margin: 0.25rem 0 0.5rem; font-size: 1.75rem; }
+
+    /* Decorative tactical-map layer: fixed, clipped and inert, so it never adds page width. */
+    .terrain {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .terrain svg { display: block; width: 100%; height: 100%; }
+
+    /* Fire-mission hero */
+    .hero {
+      background: linear-gradient(135deg, var(--color-charcoal) 0%, var(--color-olive-deep) 100%);
+      color: var(--color-hero-text);
+      border-bottom: 6px solid var(--mode-glow);
+      overflow: hidden;
+    }
+    .hero-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 1.5rem;
+      align-items: center;
+      width: 100%;
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: 1.5rem 1rem;
+    }
+    .hero-copy { min-width: 0; }
+    .eyebrow { margin: 0; font-weight: 700; letter-spacing: 0.04em; color: var(--color-brass); }
+    h1 { margin: 0.25rem 0 0.5rem; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem); }
+    .hero-lede { margin: 0; color: var(--color-hero-muted); max-width: 34rem; }
+    .hero-art { min-width: 0; }
+    .hero-art svg { display: block; width: 100%; max-width: 100%; height: auto; }
+    .hero-art text { font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; }
+    body[data-view="quiz"] .hero-inner, body[data-view="results"] .hero-inner { padding-top: 1rem; padding-bottom: 1rem; }
+    body[data-view="quiz"] .hero-art svg, body[data-view="results"] .hero-art svg { max-height: 12rem; }
+
+    /* Artwork parts. Rest states are the static artwork shown with reduced motion. */
+    #target-grid { color: var(--mode-glow); }
+    #muzzle-flash { opacity: 0; transform-box: fill-box; transform-origin: 0% 50%; }
+    #projectile { opacity: 0; transform: translate(230px, 125px); }
+    #smoke .smoke-puff { opacity: 0; transform-box: fill-box; transform-origin: center; }
+    #target-grid .target-pulse { opacity: 0; transform-box: fill-box; transform-origin: center; }
+
+    /* One fire mission (4 seconds) plays when the art appears; nothing loops, so no pause control is needed. */
+    #barrel { animation: recoil 4s ease-out 1 both; }
+    #muzzle-flash { animation: muzzle-flash 4s ease-out 1 both; }
+    #projectile { animation: projectile-arc 4s linear 1 both; }
+    #smoke .smoke-puff { animation: smoke-drift 4s ease-out 1 both; }
+    #smoke .smoke-puff:nth-child(2) { animation-delay: 0.12s; }
+    #smoke .smoke-puff:nth-child(3) { animation-delay: 0.24s; }
+    #target-grid .target-pulse { animation: target-pulse 4s ease-out 1 both; }
+
+    @keyframes recoil {
+      0%, 15% { transform: translateX(0); }
+      16.5% { transform: translateX(-10px); }
+      32%, 100% { transform: translateX(0); }
+    }
+    @keyframes muzzle-flash {
+      0%, 15% { opacity: 0; transform: scale(0.3); }
+      16.5% { opacity: 1; transform: scale(1); }
+      22%, 100% { opacity: 0; transform: scale(1.2); }
+    }
+    @keyframes smoke-drift {
+      0%, 16% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+      21% { opacity: 0.85; transform: translate(4px, -4px) scale(0.9); }
+      70%, 100% { opacity: 0; transform: translate(30px, -34px) scale(2.2); }
+    }
+    @keyframes projectile-arc {
+      0%, 15.9% { opacity: 0; transform: translate(230px, 125px); }
+      16% { opacity: 1; transform: translate(230px, 125px); }
+      21% { transform: translate(252.3px, 89.8px); }
+      26% { transform: translate(274.5px, 66.7px); }
+      31% { transform: translate(296.8px, 55.7px); }
+      36% { transform: translate(319px, 56.8px); }
+      41% { transform: translate(341.3px, 69.9px); }
+      46% { transform: translate(363.5px, 95.2px); }
+      51% { transform: translate(385.8px, 132.5px); }
+      56% { opacity: 1; transform: translate(408px, 182px); }
+      57%, 100% { opacity: 0; transform: translate(408px, 182px); }
+    }
+    @keyframes target-pulse {
+      0%, 56% { opacity: 0; transform: scale(0.3); }
+      58% { opacity: 1; transform: scale(0.6); }
+      85%, 100% { opacity: 0; transform: scale(2.6); }
+    }
+    @keyframes view-enter {
+      from { opacity: 0; transform: translateY(0.5rem); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* Main card */
+    .app {
+      width: calc(100% - 2rem);
+      max-width: 52rem;
+      margin: 1.5rem auto 2rem;
+      padding: 1.25rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-top: 6px solid var(--mode-accent);
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 10px rgba(35, 40, 30, 0.18);
+    }
+    .view { animation: view-enter 0.3s ease-out both; }
+    .view > h2:first-child { margin-top: 0; }
+
     button {
       font: inherit;
       min-height: 44px;
@@ -45,18 +169,25 @@
       border-radius: 0.375rem;
       background: var(--color-accent);
       color: var(--color-accent-text);
+      font-weight: 600;
       cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
     }
+    button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
     button.secondary { background: var(--color-surface); color: var(--color-accent); }
+    button.secondary:hover:not(:disabled) { background: #eef0e2; color: var(--color-accent-hover); }
     button:disabled { cursor: not-allowed; opacity: 0.5; }
     :focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
     .study-warning {
       border: 2px solid var(--color-warning-border);
+      border-left-width: 8px;
       border-radius: 0.5rem;
       background: var(--color-warning-bg);
       padding: 1rem;
     }
     .study-warning p { margin-top: 0; }
+    .study-warning strong { color: var(--color-warning-text); }
     .study-confirm {
       display: flex;
       gap: 0.75rem;
@@ -66,17 +197,30 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .study-confirm input { flex: none; width: 1.5rem; height: 1.5rem; margin: 0.1rem 0 0; }
+    .study-confirm input { flex: none; width: 1.5rem; height: 1.5rem; margin: 0.1rem 0 0; accent-color: var(--color-accent); }
+
     .mode-list {
       display: grid;
       gap: 0.75rem;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
     }
-    .mode-button { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; text-align: left; }
-    .mode-name { font-size: 1.125rem; font-weight: 700; }
-    .mode-desc { font-size: 0.9375rem; }
+    .mode-button {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+      text-align: left;
+      background: var(--mode-tint);
+      color: var(--color-text);
+      border: 2px solid var(--color-border);
+      border-left: 10px solid var(--mode-accent);
+    }
+    .mode-button:hover:not(:disabled) { background: var(--color-surface); border-color: var(--mode-accent); color: var(--color-text); }
+    .mode-name { font-size: 1.125rem; font-weight: 700; color: var(--mode-accent); }
+    .mode-desc { font-size: 0.9375rem; font-weight: 400; }
     .privacy-note, .question-category, .results-reminder { color: var(--color-muted); }
-    progress { width: 100%; height: 0.75rem; }
+
+    progress { width: 100%; height: 0.75rem; accent-color: var(--mode-accent); }
     fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
     legend { display: block; max-width: 100%; margin-bottom: 0.75rem; padding: 0; font-size: 1.125rem; font-weight: 600; white-space: normal; }
     .option {
@@ -90,17 +234,19 @@
       border-radius: 0.5rem;
       background: var(--color-surface);
       cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
     }
-    .option input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0.15rem 0 0; }
+    .option:hover:not(.option-correct):not(.option-incorrect) { border-color: var(--mode-accent); background: var(--mode-tint); }
+    .option input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0.15rem 0 0; accent-color: var(--mode-accent); }
     .option-body { min-width: 0; }
     .option-letter { font-weight: 700; }
     .option-tag { display: block; font-size: 0.875rem; font-weight: 700; }
-    .option-correct { border-color: var(--color-correct); }
+    .option-correct { border-color: var(--color-correct); border-width: 3px; }
     .option-correct .option-tag { color: var(--color-correct); }
-    .option-incorrect { border-color: var(--color-incorrect); }
+    .option-incorrect { border-color: var(--color-incorrect); border-width: 3px; border-style: dashed; }
     .option-incorrect .option-tag { color: var(--color-incorrect); }
     .validation-message { color: var(--color-incorrect); font-weight: 600; }
-    .feedback { margin-top: 1rem; padding: 0.75rem 1rem; border-left: 6px solid var(--color-border); background: var(--color-surface); }
+    .feedback { margin-top: 1rem; padding: 0.75rem 1rem; border-left: 6px solid var(--color-border); background: var(--mode-tint); animation: view-enter 0.25s ease-out both; }
     .feedback p { margin: 0.25rem 0; }
     .feedback-correct { border-left-color: var(--color-correct); }
     .feedback-incorrect { border-left-color: var(--color-incorrect); }
@@ -112,16 +258,127 @@
     .review-list { padding-left: 1.25rem; }
     .review-item { margin-bottom: 1.25rem; }
     .review-item p { margin: 0.25rem 0; }
+
+    /* Narrow screens: stack the hero and every control row. */
+    @media (max-width: 760px) {
+      .hero-inner { grid-template-columns: 1fr; gap: 0.75rem; padding: 1rem; }
+      .hero-art svg { max-height: 13rem; margin: 0 auto; }
+      body[data-view="quiz"] .hero-art, body[data-view="results"] .hero-art, body[data-view="quiz"] .hero-lede, body[data-view="results"] .hero-lede { display: none; }
+      .app { width: calc(100% - 1rem); margin: 0.75rem auto 1.5rem; padding: 1rem; }
+      .mode-list { grid-template-columns: 1fr; }
+      .quiz-actions, .results-actions { flex-direction: column; }
+      .quiz-actions button, .results-actions button { width: 100%; }
+      th, td { padding: 0.375rem; }
+    }
+
+    /* Reduced motion: stop every animation and transition; the static artwork stays visible. */
+    @media (prefers-reduced-motion: reduce) {
+      #barrel, #muzzle-flash, #projectile, #smoke .smoke-puff, #smoke .smoke-puff:nth-child(2), #smoke .smoke-puff:nth-child(3), #target-grid .target-pulse, .view, .feedback, button, .option {
+        animation: none !important;
+        transition: none !important;
+      }
+      #muzzle-flash, #smoke .smoke-puff { opacity: 0; }
+      #projectile { opacity: 1; transform: translate(319px, 56.8px); }
+      #target-grid .target-pulse { opacity: 0.6; transform: none; }
+    }
+
     @media print {
       body { background: #ffffff; }
-      .results-actions, .noscript { display: none !important; }
+      .terrain, .hero-art, .results-actions, .noscript { display: none !important; }
+      .hero { background: #ffffff; color: #000000; border-bottom: 2px solid #000000; }
+      .eyebrow, .hero-lede { color: #000000; }
+      .app { box-shadow: none; border: 0; margin: 0 auto; }
     }
   </style>
 </head>
-<body>
-  <header class="site-header">
-    <p class="eyebrow">Philippine Army · Field Artillery Operations</p>
-    <h1>Field Artillery Mastery Quiz</h1>
+<body data-view="landing">
+  <div class="terrain" aria-hidden="true">
+    <svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="#5b6b3a" stroke-opacity="0.16" stroke-width="1">
+        <path d="M0 100H1200M0 200H1200M0 300H1200M0 400H1200M0 500H1200M0 600H1200M0 700H1200M100 0V800M200 0V800M300 0V800M400 0V800M500 0V800M600 0V800M700 0V800M800 0V800M900 0V800M1000 0V800M1100 0V800"/>
+      </g>
+      <g fill="none" stroke="#5b6b3a" stroke-opacity="0.3" stroke-width="1.5">
+        <path d="M200 260C260 180 400 170 460 240C520 310 470 400 380 410C280 420 150 350 200 260Z"/>
+        <path d="M250 270C290 220 390 215 425 260C460 305 430 360 370 365C300 370 220 320 250 270Z"/>
+        <path d="M300 280C330 255 380 255 395 285C410 315 380 335 350 335C310 335 285 305 300 280Z"/>
+        <path d="M800 120C900 60 1080 100 1100 200C1120 300 980 340 880 300C780 260 720 170 800 120Z"/>
+        <path d="M850 150C920 110 1040 140 1050 205C1060 270 970 290 900 265C830 240 800 180 850 150Z"/>
+        <path d="M900 180C950 160 1000 180 1005 210C1010 240 960 250 925 238C890 226 870 195 900 180Z"/>
+        <path d="M0 620C200 580 400 660 600 610C800 560 1000 640 1200 600"/>
+        <path d="M0 680C220 640 420 720 620 670C820 620 1010 700 1200 660"/>
+      </g>
+      <g fill="none" stroke="#9a5a00" stroke-opacity="0.2" stroke-width="1.5" stroke-dasharray="6 8">
+        <circle cx="1100" cy="720" r="200"/>
+        <circle cx="1100" cy="720" r="350"/>
+        <circle cx="1100" cy="720" r="500"/>
+      </g>
+    </svg>
+  </div>
+
+  <header class="site-header hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow">Philippine Army · Field Artillery Operations</p>
+        <h1>Field Artillery Mastery Quiz</h1>
+        <p class="hero-lede">A practice aid for the Field Artillery Operations lesson: 75 situational questions across Easy, Medium, and Hard.</p>
+      </div>
+      <div id="hero-art" class="hero-art" aria-hidden="true">
+        <svg viewBox="0 0 480 250" aria-hidden="true" focusable="false">
+          <path class="map-grid" d="M0 50H480M0 100H480M0 150H480M0 200H480M80 0V250M160 0V250M240 0V250M320 0V250M400 0V250" fill="none" stroke="#f3efdf" stroke-opacity="0.08" stroke-width="1"/>
+          <g class="range-rings" fill="none" stroke="#e3b65a" stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="4 6">
+            <circle cx="140" cy="200" r="110"/>
+            <circle cx="140" cy="200" r="190"/>
+            <circle cx="140" cy="200" r="270"/>
+          </g>
+          <text x="146" y="86" fill="#e3b65a" fill-opacity="0.85">RG 4000</text>
+          <text x="146" y="18" fill="#e3b65a" fill-opacity="0.85">RG 8000</text>
+          <text x="262" y="18" fill="#e3b65a">FIRE MISSION · BTRY A</text>
+          <text x="262" y="31" fill="#d6d2bf">GRID 51P TT 3341 1276</text>
+          <path class="hill" d="M0 214C60 206 110 210 170 212C240 214 300 200 360 206C410 210 450 204 480 208V250H0Z" fill="#3d4a2a"/>
+          <path d="M0 226C80 220 160 228 240 224C320 220 400 230 480 224M0 238C90 234 170 242 260 238C340 234 410 242 480 238" fill="none" stroke="#5b6b3a" stroke-width="1.5"/>
+          <text x="12" y="246" fill="#d6d2bf">AZ 1600 MILS · SHELL HE · FUZE Q</text>
+          <path class="trajectory" d="M230 125Q319 -40 408 182" fill="none" stroke="#f3efdf" stroke-opacity="0.55" stroke-width="1.5" stroke-dasharray="3 6"/>
+          <g id="target-grid" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="376" y="150" width="64" height="64"/>
+            <path d="M392 150V214M408 150V214M424 150V214M376 166H440M376 182H440M376 198H440" stroke-opacity="0.45" stroke-width="1"/>
+            <circle cx="408" cy="182" r="9"/>
+            <path d="M408 166V177M408 187V198M392 182H403M413 182H424"/>
+            <circle class="target-pulse" cx="408" cy="182" r="14" stroke-width="2.5"/>
+            <text x="376" y="143" fill="currentColor" stroke="none">TGT AF 1001</text>
+          </g>
+          <g id="howitzer">
+            <ellipse cx="124" cy="214" rx="82" ry="5" fill="#1b1f16" fill-opacity="0.5"/>
+            <path d="M134 188L58 207L52 214H66L142 198Z" fill="#4a5730" stroke="#1f231b" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M46 205H62L60 217H44Z" fill="#3a4524" stroke="#1f231b" stroke-width="2" stroke-linejoin="round"/>
+            <g transform="translate(140 182) rotate(-32)">
+              <g id="barrel">
+                <rect x="-4" y="-5" width="98" height="10" rx="3" fill="#6b7a45" stroke="#1f231b" stroke-width="2"/>
+                <path d="M6 -2.5H86" stroke="#a3b36d" stroke-width="2" stroke-linecap="round"/>
+                <rect x="92" y="-7.5" width="13" height="15" rx="2.5" fill="#4a5730" stroke="#1f231b" stroke-width="2"/>
+              </g>
+              <rect x="-20" y="-9" width="46" height="18" rx="5" fill="#586636" stroke="#1f231b" stroke-width="2"/>
+              <g id="muzzle-flash">
+                <path d="M106 0L122 -10L118 -3L136 0L118 3L122 10Z" fill="#ffd166" stroke="#ff8a3d" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="111" cy="0" r="5" fill="#fff3b0"/>
+              </g>
+            </g>
+            <path d="M116 162L148 156L154 194L122 199Z" fill="#6b7a45" stroke="#1f231b" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M122 168L144 164" stroke="#a3b36d" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="140" cy="198" r="17" fill="#2a2f24" stroke="#1f231b" stroke-width="2"/>
+            <circle cx="140" cy="198" r="10" fill="none" stroke="#586636" stroke-width="3"/>
+            <circle cx="140" cy="198" r="4" fill="#e3b65a"/>
+          </g>
+          <g id="smoke" fill="#e9e5d6">
+            <circle class="smoke-puff" cx="232" cy="121" r="7"/>
+            <circle class="smoke-puff" cx="241" cy="115" r="6"/>
+            <circle class="smoke-puff" cx="228" cy="112" r="5"/>
+          </g>
+          <g id="projectile">
+            <ellipse cx="0" cy="0" rx="5" ry="3.5" fill="#e3b65a" stroke="#1f231b" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
   </header>
 
   <main id="app" class="app">
@@ -399,6 +656,7 @@
       studyConfirm: byId('study-confirm'),
       modeHint: byId('mode-hint'),
       difficultyHeading: byId('difficulty-heading'),
+      unavailableHeading: byId('unavailable-heading'),
       modeButtons: {
         easy: byId('mode-easy'),
         medium: byId('mode-medium'),
@@ -435,6 +693,12 @@
       return node;
     }
 
+    // Empties a node and appends the given nodes; avoids the Safari 14+ only children-replacement API.
+    function setChildren(node, children) {
+      node.textContent = '';
+      children.forEach(function (child) { node.appendChild(child); });
+    }
+
     function optionText(question, index) {
       return LETTERS[index] + '. ' + question.options[index];
     }
@@ -443,6 +707,15 @@
       state.view = name;
       Object.keys(ui.views).forEach(function (key) {
         ui.views[key].hidden = key !== name;
+      });
+      // Lets the stylesheet compact the hero outside the landing view.
+      document.body.setAttribute('data-view', name);
+    }
+
+    // Difficulty accent for the page: theme-easy, theme-medium or theme-hard; null clears it.
+    function setTheme(mode) {
+      MODES.forEach(function (key) {
+        document.body.classList.toggle('theme-' + key, key === mode);
       });
     }
 
@@ -490,6 +763,7 @@
       if (!state.available || !state.studyConfirmed || MODES.indexOf(mode) === -1) return false;
       state.attempt = createAttempt(mode, state.banks, state.random);
       state.results = null;
+      setTheme(mode);
       showView('quiz');
       renderQuestion();
       ui.questionHeading.focus();
@@ -541,7 +815,7 @@
         fieldset.appendChild(label);
         return input;
       });
-      ui.questionArea.replaceChildren(fieldset);
+      setChildren(ui.questionArea, [fieldset]);
 
       hideValidation();
       renderFeedback(question, response);
@@ -556,7 +830,7 @@
     function renderFeedback(question, response) {
       if (!response.checked) {
         ui.feedback.className = 'feedback';
-        ui.feedback.replaceChildren();
+        setChildren(ui.feedback, []);
         ui.feedback.hidden = true;
         return;
       }
@@ -571,7 +845,7 @@
         make('p', 'feedback-explanation', 'Explanation: ' + question.explanation),
         make('p', 'feedback-source', 'Lesson reference: slide ' + question.sourceSlides.join(', '))
       );
-      ui.feedback.replaceChildren.apply(ui.feedback, parts);
+      setChildren(ui.feedback, parts);
       ui.feedback.hidden = false;
     }
 
@@ -640,6 +914,7 @@
       if (!state.available) return false;
       state.attempt = null;
       state.results = null;
+      setTheme(null);
       showView('landing');
       setStudyConfirmed(state.studyConfirmed);
       ui.difficultyHeading.focus();
@@ -655,7 +930,7 @@
       score.append(make('strong', null, 'Score: '), results.score + ' of ' + results.total + ' correct (' + results.percentage + '%)');
       var band = make('p', 'results-band');
       band.append(make('strong', null, 'Mastery band: '), results.band.name + '. ' + results.band.description);
-      ui.resultsSummary.replaceChildren(score, band);
+      setChildren(ui.resultsSummary, [score, band]);
 
       var rows = results.categories.map(function (entry) {
         var row = document.createElement('tr');
@@ -664,7 +939,7 @@
         row.append(name, make('td', null, entry.correct + ' of ' + entry.total + ' (' + entry.percentage + '%)'), make('td', null, entry.status));
         return row;
       });
-      ui.resultsCategories.replaceChildren.apply(ui.resultsCategories, rows);
+      setChildren(ui.resultsCategories, rows);
 
       renderTopicList(ui.resultsStrengths, results.categories.filter(function (entry) { return entry.status === 'Strength'; }), 'No topic reached 75% in this attempt.');
       renderTopicList(ui.resultsGaps, results.categories.filter(function (entry) { return entry.status === 'Gap'; }), 'No gaps in this attempt. Keep studying the complete lesson.');
@@ -683,15 +958,15 @@
         );
         return item;
       });
-      ui.resultsReview.replaceChildren.apply(ui.resultsReview, items);
+      setChildren(ui.resultsReview, items);
     }
 
     function renderTopicList(list, entries, emptyText) {
       if (!entries.length) {
-        list.replaceChildren(make('li', 'topic-empty', emptyText));
+        setChildren(list, [make('li', 'topic-empty', emptyText)]);
         return;
       }
-      list.replaceChildren.apply(list, entries.map(function (entry) {
+      setChildren(list, entries.map(function (entry) {
         return make('li', null, entry.category + ': ' + entry.correct + ' of ' + entry.total + ' correct');
       }));
     }
@@ -728,6 +1003,7 @@
         ui.studyConfirm.disabled = true;
         MODES.forEach(function (mode) { ui.modeButtons[mode].disabled = true; });
         showView('unavailable');
+        ui.unavailableHeading.focus();
         console.error('Field Artillery Mastery Quiz is unavailable: ' + state.errors.join('; '));
         return;
       }
