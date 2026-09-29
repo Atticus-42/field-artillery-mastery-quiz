@@ -109,9 +109,20 @@ await test('Easy questions satisfy the schema, difficulty, four-choice and sourc
   });
 });
 
+function assertUniquePrompts(banks) {
+  const seen = new Map();
+  for (const [difficulty, bank] of Object.entries(banks)) {
+    for (const item of bank) {
+      const normalized = item.prompt.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      const label = `${difficulty} ${item.id}`;
+      assert.ok(!seen.has(normalized), `Duplicate normalized prompt: ${seen.get(normalized)} and ${label}`);
+      seen.set(normalized, label);
+    }
+  }
+}
+
 await test('Easy prompts are unique after case, punctuation and whitespace normalization', () => {
-  const prompts = easyBank.map(item => item.prompt.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim());
-  assert.equal(new Set(prompts).size, prompts.length);
+  assertUniquePrompts({ easy: easyBank });
 });
 
 await test('Easy primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
@@ -135,6 +146,58 @@ await test('Easy answers have 7/6/6/6 occurrences across A/B/C/D', () => {
   for (const item of easyBank) counts[item.answer]++;
   assert.deepEqual(counts, [7, 6, 6, 6]);
   assert.ok(counts.every(count => count === 6 || count === 7));
+});
+
+const mediumBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'medium.json'), 'utf8'));
+
+await test('Medium bank contains exactly 25 questions with sequential IDs 1-25', () => {
+  assert.equal(mediumBank.length, 25);
+  assert.deepEqual(mediumBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
+});
+
+await test('Medium questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
+  const { validateQuestion } = await import('./build.mjs');
+  mediumBank.forEach((item, index) => {
+    assert.deepEqual(validateQuestion(item, 'medium', index + 1), [], `Medium ${index + 1}`);
+    assert.ok(item.tags.length > 0, `Medium ${index + 1} must identify its topics`);
+  });
+});
+
+await test('Medium primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
+  const counts = {};
+  for (const item of mediumBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
+  assert.deepEqual(counts, {
+    'Mission and Functions': 2,
+    'Tactical Roles': 3,
+    'Capabilities and Limitations': 3,
+    'Weapon Classification': 2,
+    'Effects of Fires': 4,
+    'Philippine Operational Environment': 2,
+    'Four Basic Tasks': 3,
+    'FA System Elements and Responsibilities': 4,
+    'Employment Tactics and Integrated Decisions': 2,
+  });
+});
+
+await test('Medium answers have 6/7/6/6 occurrences across A/B/C/D', () => {
+  const counts = [0, 0, 0, 0];
+  for (const item of mediumBank) counts[item.answer]++;
+  assert.deepEqual(counts, [6, 7, 6, 6]);
+});
+
+await test('Easy and Medium prompts are unique within and across both banks', () => {
+  assertUniquePrompts({ easy: easyBank, medium: mediumBank });
+});
+
+await test('Cross-bank duplicate check rejects a literal case, punctuation and spacing near-copy', () => {
+  assert.throws(() => assertUniquePrompts({
+    easy: [{ id: 1, prompt: 'A Philippine Army review: which system failed?' }],
+    medium: [{ id: 8, prompt: '  A PHILIPPINE army REVIEW -- which   system failed!  ' }],
+  }), /Duplicate normalized prompt: easy 1 and medium 8/);
+  assert.doesNotThrow(() => assertUniquePrompts({
+    easy: [{ id: 1, prompt: 'A Philippine Army review: which system failed?' }],
+    medium: [{ id: 8, prompt: 'A Philippine Army review: which task was fulfilled?' }],
+  }));
 });
 
 if (failures > 0) {
