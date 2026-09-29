@@ -58,6 +58,17 @@ await test('buildHtml escapes script-closing text in embedded JSON', async () =>
   assert.equal(JSON.parse(html.match(/<script type="application\/json">(.*?)<\/script>/)[1])[0].prompt, '</script><script>alert(1)</script>');
 });
 
+await test('buildHtml preserves dollar replacement tokens in authored text', async () => {
+  const { buildHtml } = await import('./build.mjs');
+  const template = '<script type="application/json" id="easy">{{EASY_QUESTIONS}}</script>{{MEDIUM_QUESTIONS}}{{HARD_QUESTIONS}}';
+  for (const token of ['$&', '$`', "$'", '$$']) {
+    const prompt = `Literal ${token} text must survive the build.`;
+    const html = buildHtml(template, { easy: [{ ...question, prompt }], medium: [], hard: [] });
+    const embedded = JSON.parse(html.match(/id="easy">(.*?)<\/script>/)[1]);
+    assert.equal(embedded[0].prompt, prompt, token);
+  }
+});
+
 await test('buildHtml rejects duplicated bank placeholders', async () => {
   const { buildHtml } = await import('./build.mjs');
   assert.throws(() => buildHtml('{{EASY_QUESTIONS}}{{EASY_QUESTIONS}}{{MEDIUM_QUESTIONS}}{{HARD_QUESTIONS}}', { easy: [], medium: [], hard: [] }), /EASY_QUESTIONS/);
@@ -108,6 +119,12 @@ await test('Easy questions satisfy the schema, difficulty, four-choice and sourc
     assert.deepEqual(validateQuestion(item, 'easy', index + 1), [], `Easy ${index + 1}`);
     assert.ok(item.tags.length > 0, `Easy ${index + 1} must identify its topics`);
   });
+});
+
+await test('Easy 23 assesses the Signal Platoon and its headquarters placement', () => {
+  const item = easyBank[22];
+  assert.match(item.prompt, /Headquarters and Headquarters Battery/i);
+  assert.match(item.options[item.answer], /Signal Platoon/i);
 });
 
 function assertUniquePrompts(banks) {
@@ -214,6 +231,19 @@ await test('Hard questions satisfy the schema, difficulty, four-choice and sourc
     assert.deepEqual(validateQuestion(item, 'hard', index + 1), [], `Hard ${index + 1}`);
     assert.ok(item.tags.length >= 3, `Hard ${index + 1} must integrate several tagged concepts`);
   });
+});
+
+await test('Hard 1 correct mission judgment includes all three fire effects and integration', () => {
+  const answer = hardBank[0].options[hardBank[0].answer];
+  assert.match(answer, /destroy.*neutraliz.*suppress/i);
+  assert.match(answer, /integrat/i);
+});
+
+await test('Hard 14 defeat judgment has explicit evidence of lost will beyond withdrawal', () => {
+  const item = hardBank[13];
+  assert.match(item.prompt, /\brefus\w*\b.*\b(fight|resistance)\b/i, 'scenario must report refusal to keep fighting');
+  assert.match(item.prompt, /weapons.*(intact|serviceable)/i, 'weapons remain available');
+  assert.match(item.explanation, /withdrawal alone would not/i, 'explanation must separate withdrawal from lost will');
 });
 
 await test('Hard primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
@@ -362,6 +392,93 @@ await test('Every required coverage tag appears across the 75-question bank', ()
   const allTags = new Set([...easyBank, ...mediumBank, ...hardBank].flatMap(item => item.tags));
   const missing = REQUIRED_TAGS.filter(tag => !allTags.has(tag));
   assert.deepEqual(missing, [], `Coverage tags missing: ${missing.join(', ')}`);
+});
+
+// Curated assessment anchors: each mapped concept is needed to judge the
+// question's best answer, not merely mentioned in its scenario or explanation.
+// The reason records that judgment for human review.
+const ASSESSED_CONCEPTS = {
+  'hard:1': { reason: 'Reject destruction-only and liaison-only plans; use the full mission and integration duty.', tags: ['mission', 'destroy/neutralize/suppress mission', 'integration of fire-support means'] },
+  'medium:1': { reason: 'Both timeliness and accuracy are necessary to judge the mission report.', tags: ['timely and accurate support'] },
+  'hard:2': { reason: 'Keep artillery functions in place to sustain continuous fires across the operation.', tags: ['functions', 'continuous fire support'] },
+  'medium:21': { reason: 'Diagnose failed radio transmission after valid command conversion.', tags: ['communications'] },
+  'medium:16': { reason: 'Separate successful movement from failed supply and sustained operations.', tags: ['mobility', 'logistics', 'mobility assets'] },
+  'easy:22': { reason: 'Choose survey to establish the common location and direction grid.', tags: ['survey', 'common survey grid'] },
+  'hard:22': { reason: 'Require MET data to reach fire direction before predicted fires.', tags: ['meteorological data', 'ballistic meteorology'] },
+  'easy:20': { reason: 'Diagnose the missing target detection, identification, and location function.', tags: ['target acquisition'] },
+  'medium:25': { reason: 'Separate successful conversion from weapon coverage and ammunition selection gaps.', tags: ['fire direction and coordination', 'weapon/ammunition combinations'] },
+  'easy:2': { reason: 'Select the artillery contribution to the maneuver cell and its elements.', tags: ['fire-support cells', 'fire-support elements'] },
+  'medium:2': { reason: 'Identify command of additional artillery as a distinct unfinished function.', tags: ['command and control of additional artillery'] },
+  'easy:3': { reason: 'Identify the role used against a threat to the supported force.', tags: ['close support'] },
+  'hard:3': { reason: 'Attack an unreachable reserve in depth to create a maneuver window.', tags: ['attack at depth', 'interdiction', 'add depth to the battlefield'] },
+  'hard:4': { reason: 'Target the whole enemy fire-support system rather than guns alone.', tags: ['counterfires'] },
+  'medium:6': { reason: 'Keep weather capability separate from limited self-defense.', tags: ['all-weather and all-terrain fires', 'limited self-defense'] },
+  'easy:6': { reason: 'Correct the claim that shifting and massing requires displacement.', tags: ['rapid shifting and massing'] },
+  'medium:7': { reason: 'Credit shell and fuze selection without erasing point-target ammunition cost.', tags: ['shell/fuze variety', 'point-target ammunition cost'] },
+  'hard:8': { reason: 'Choose displacement timed to preserve needed fires while reducing exposure.', tags: ['continuous support by judicious displacement'] },
+  'medium:8': { reason: 'Reject the inference that stationary firing has no detectable signature.', tags: ['detectable firing signature'] },
+  'easy:8': { reason: 'Apply the specified range limit despite all-weather capability.', tags: ['weapon range limits'] },
+  'medium:9': { reason: 'Correct both boundary-caliber errors using the exact bands.', tags: ['classification by caliber', 'light', 'heavy', 'very heavy'] },
+  'easy:9': { reason: 'Reclassify a 155 mm weapon as medium.', tags: ['medium'] },
+  'hard:9': { reason: 'Select only the weapon satisfying both caliber and towed transport constraints.', tags: ['classification by transport', 'towed', 'aerial'] },
+  'medium:10': { reason: 'Keep caliber classification separate from self-propelled transport.', tags: ['self-propelled'] },
+  'easy:11': { reason: 'Replace neutralization with destruction when the force is physically ineffective until reconstituted.', tags: ['destroy'] },
+  'easy:12': { reason: 'Choose neutralization for a short operation-specific interruption.', tags: ['neutralize'] },
+  'easy:13': { reason: 'Identify temporary below-mission performance as suppression.', tags: ['suppress'] },
+  'hard:12': { reason: 'Allocate fires, terrain, obstacles, and feint to distinct operational effects.', tags: ['disrupt', 'defeat', 'diversion'] },
+  'medium:11': { reason: 'Correct the three threshold values in their effect order.', tags: ['30-percent computed-effect threshold', '10-percent computed-effect threshold', '3-percent computed-effect threshold'] },
+  'easy:15': { reason: 'Extend the mobility review to rapid inter-island displacement.', tags: ['Philippine archipelago', 'rapid displacement between islands'] },
+  'easy:16': { reason: 'Reject a fast move that interrupts the ongoing operation.', tags: ['continuity during displacement'] },
+  'easy:17': { reason: 'Identify readiness to answer a unit in contact.', tags: ['support forces in contact'] },
+  'easy:18': { reason: 'Require fires to serve the supported commander objective.', tags: ['support the concept of operations'] },
+  'easy:19': { reason: 'Coordinate available assets to economize and maximize effect.', tags: ['synchronize fire support', 'economize resources'] },
+  'medium:19': { reason: 'Diagnose loss of continued support as a sustainment failure.', tags: ['sustain FA operations'] },
+  'medium:23': { reason: 'Keep formal relationships while correcting the smallest deployable unit.', tags: ['organization', 'command and support relationships', 'FA platoon smallest deployable unit'] },
+  'hard:24': { reason: 'Reposition for defense so fires continue after possible penetration.', tags: ['employment tactics', 'defensive positioning', 'continuity of fires'] },
+  'hard:25': { reason: 'Choose forward positioning for offense while balancing exposure and range.', tags: ['offensive positioning'] },
+  'hard:20': { reason: 'Resolve conflicting observer and drone locations through acquisition and artillery intelligence before command conversion.', tags: ['observers and collectors', 'drones and vertical imagery', 'FA intelligence', 'Target Acquisition Platoon', 'FA Regiment and FA Bn intelligence office'] },
+  'easy:21': { reason: 'Assign call-for-fire conversion to the fire direction center.', tags: ['fire direction center', 'call-for-fire conversion'] },
+  'hard:21': { reason: 'Choose a weapon group suitable for target coverage and within range.', tags: ['suitable weapon coverage'] },
+  'medium:22': { reason: 'Recognize MET as a separate requirement despite a verified survey grid.', tags: ['five requirements for accurate predicted fires'] },
+  'easy:23': { reason: 'Assign the broken voice and digital radio links to the Signal Platoon under its headquarters battery.', tags: ['radio and digital communications', 'Signal Platoon', 'Headquarters and Headquarters Battery'] },
+};
+
+function assessmentMapErrors(banks, mapping) {
+  const errors = [];
+  const mappedTags = new Set();
+  for (const [reference, entry] of Object.entries(mapping)) {
+    const match = /^(easy|medium|hard):(\d+)$/.exec(reference);
+    if (!match || !Number.isInteger(Number(match[2])) || Number(match[2]) < 1) {
+      errors.push(`invalid assessment reference ${reference}`);
+      continue;
+    }
+    const item = banks[match[1]]?.find(question => question.id === Number(match[2]));
+    if (!item) errors.push(`missing mapped question ${reference}`);
+    if (typeof entry.reason !== 'string' || !entry.reason.trim()) errors.push(`missing assessment reason ${reference}`);
+    for (const tag of entry.tags ?? []) {
+      if (mappedTags.has(tag)) errors.push(`duplicate assessment tag ${tag}`);
+      mappedTags.add(tag);
+      if (!REQUIRED_TAGS.includes(tag)) errors.push(`unrequired assessment tag ${tag}`);
+      if (item && !item.tags.includes(tag)) errors.push(`${reference} missing tag ${tag}`);
+    }
+  }
+  for (const tag of REQUIRED_TAGS) if (!mappedTags.has(tag)) errors.push(`unmapped required concept ${tag}`);
+  return errors;
+}
+
+await test('Every required concept has a reviewed assessment anchor in an existing tagged question', () => {
+  assert.deepEqual(assessmentMapErrors({ easy: easyBank, medium: mediumBank, hard: hardBank }, ASSESSED_CONCEPTS), []);
+});
+
+await test('Assessment map rejects a missing mapped question, tag, or anchor', () => {
+  const banks = { easy: easyBank, medium: mediumBank, hard: hardBank };
+  const withoutQuestion = { ...banks, hard: hardBank.filter(item => item.id !== 20) };
+  assert.ok(assessmentMapErrors(withoutQuestion, ASSESSED_CONCEPTS).includes('missing mapped question hard:20'));
+  const withoutTag = { ...banks, easy: easyBank.map(item => item.id === 23 ? { ...item, tags: item.tags.filter(tag => tag !== 'Signal Platoon') } : item) };
+  assert.ok(assessmentMapErrors(withoutTag, ASSESSED_CONCEPTS).includes('easy:23 missing tag Signal Platoon'));
+  const withoutAnchor = { ...ASSESSED_CONCEPTS };
+  delete withoutAnchor['hard:20'];
+  assert.ok(assessmentMapErrors(banks, withoutAnchor).includes('unmapped required concept Target Acquisition Platoon'));
 });
 
 // ---------------------------------------------------------------------------
@@ -1065,7 +1182,7 @@ await test('App keeps answers in memory only and loads no external resources', (
   assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
 });
 
-await test('App script avoids replaceChildren so older Safari (before 14) still renders questions', () => {
+await test('App script avoids the Safari 14+ replaceChildren API', () => {
   const code = appScripts(parseHtml(builtHtml)).map(script => script.textContent).join('\n');
   assert.ok(!/\breplaceChildren\b/.test(code), 'app script must not call replaceChildren');
 });

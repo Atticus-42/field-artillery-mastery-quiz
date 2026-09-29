@@ -45,7 +45,7 @@ export function buildHtml(template, banks) {
       throw new Error(`${placeholder} must occur exactly once`);
     }
     const json = JSON.stringify(banks[difficulty]).replaceAll('<', '\\u003c');
-    html = html.replace(placeholder, json);
+    html = html.replace(placeholder, () => json);
   }
   return html;
 }

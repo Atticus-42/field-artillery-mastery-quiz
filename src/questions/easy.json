@@ -356,15 +356,15 @@
     "difficulty": "easy",
     "category": "FA System Elements and Responsibilities",
     "tags": ["communications", "radio and digital communications", "Signal Platoon", "Headquarters and Headquarters Battery"],
-    "prompt": "During a Philippine Army communications exercise, unreliable voice and digital radio links delay exchanges even though the participating staff have completed their work. Which system element is most directly responsible for the reliability issue described?",
+    "prompt": "During a Philippine Army communications exercise, unreliable voice and digital radio links delay exchanges even though the staff have completed their work. Which platoon under Headquarters and Headquarters Battery should address that communications gap?",
     "options": [
-      "Communications.",
-      "Ballistic meteorology.",
-      "Survey.",
-      "Weapon/ammunition combinations."
+      "The Signal Platoon, which supports the voice and digital radio links.",
+      "The MET section, which supplies data for predicted fires.",
+      "The survey section, which establishes a common grid.",
+      "The Target Acquisition Platoon, which collects target information."
     ],
     "answer": 0,
-    "explanation": "Slide 37 links artillery effectiveness and responsiveness to efficient, reliable communications and identifies radio for voice and digital use as the principal means. The Signal Platoon is under Headquarters and Headquarters Battery.",
+    "explanation": "Slide 37 links artillery effectiveness and responsiveness to efficient, reliable communications, identifies radio for voice and digital use as the principal means, and places the Signal Platoon under Headquarters and Headquarters Battery. MET, survey, and target acquisition have different functions.",
     "sourceSlides": [37]
   },
   {

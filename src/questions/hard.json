@@ -3,15 +3,15 @@
     "id": 1,
     "difficulty": "hard",
     "category": "Mission and Functions",
-    "prompt": "A Philippine Army brigade is planning a landing on the fictional island of Pulo Tagak. Mortars, naval guns, and attack helicopters will join the supporting field artillery battalion, and time before the landing is short. The brigade staff proposes that the artillery confine itself to its own fires and leave all integration of fire support to a naval liaison officer. Which objection by the artillery commander is best supported by the lesson?",
+    "prompt": "A Philippine Army brigade is planning a landing on fictional Pulo Tagak. Some enemy positions must be destroyed, while others need only neutralization or suppression during the short landing window. Mortars, naval guns, and attack helicopters will join the supporting artillery battalion. The staff proposes that artillery plan destruction fires only and leave all integration of fire support to a naval liaison officer. Which objection by the artillery commander best follows the lesson?",
     "options": [
       "The artillery should command the mortars, naval guns, and helicopters, because it commands and controls additional fire-support units.",
       "The artillery mission is complete once the enemy is destroyed, so integration becomes a concern if its destruction fires fail.",
-      "The artillery mission includes assisting the integration of all fire-support means, and artillery forms the fire-support cell's nucleus.",
+      "The artillery mission uses timely, accurate fires to destroy, neutralize, or suppress as needed and includes assisting integration of all fire-support means through the fire-support cell.",
       "Naval guns count as additional artillery, so the battalion should control them while the liaison officer handles the helicopters."
     ],
     "answer": 2,
-    "explanation": "Slide 15 makes assisting the integration of all fire-support means part of the artillery mission, and slide 16 has artillery establish the nucleus of the supported force's fire-support cells. Slide 16's command-and-control function covers additional field artillery units, not naval guns or aviation, and the mission allows neutralization or suppression, not only destruction.",
+    "explanation": "Slide 15 gives artillery the mission of timely, accurate fires to destroy, neutralize, or suppress according to the need and of assisting integration of all fire-support means. Slide 16 has artillery establish the nucleus of supported fire-support cells. Its command-and-control function covers additional field artillery units, not naval guns or aviation; destruction alone and liaison-only integration both omit part of the mission.",
     "tags": ["mission", "destroy/neutralize/suppress mission", "integration of fire-support means", "fire-support cells", "fire-support elements", "command and control of additional artillery"],
     "sourceSlides": [15, 16]
   },
@@ -171,7 +171,7 @@
       "Neutralize, planning for at least 3 percent because the effect is needed for a brief crossing"
     ],
     "answer": 0,
-    "explanation": "Slide 26 describes neutralization as rendering the enemy incapable of interfering with a particular operation and gives a computed minimum of 10 percent. Slide 25's 30-percent destruction exceeds the stated need and spends scarce ammunition, and slide 27 pairs suppression with at least 3 percent, not 10.",
+    "explanation": "Slide 26 describes neutralization as rendering the enemy incapable of interfering with a particular operation and gives a computed minimum of 10 percent. Slide 25's 30-percent destruction exceeds the stated need and spends scarce ammunition. Slide 27 states 3 percent as the computed minimum for suppression; 10 percent is not its stated minimum, even though a higher computed effect could also suppress.",
     "tags": ["neutralize", "10-percent computed-effect threshold", "destroy", "30-percent computed-effect threshold", "suppress", "3-percent computed-effect threshold", "ammunition economy", "maneuver timing"],
     "sourceSlides": [25, 26, 27]
   },
@@ -179,15 +179,15 @@
     "id": 12,
     "difficulty": "hard",
     "category": "Effects of Fires",
-    "prompt": "A Philippine Army task force plans its principal landing on the fictional island of Isla Maragat. Fire Plan 1 combines artillery fires with a river line and obstacles on the coast road so that enemy reserves arrive out of sequence and commit piecemeal. Fire Plan 2 has a battery fire a feint on a neighboring island to draw enemy attention and forces away from the landing. The operation's end state is met when the island's defenders have lost the physical means or will to fight. Which effects do Plan 1, Plan 2, and the end state describe?",
+    "prompt": "A Philippine Army task force has a short fire-support window before its principal landing on fictional Isla Maragat. Enemy reserves remain able to fight, but a river line and obstacles on the coast road offer a chance to break their timetable. A feint on a neighboring island could draw enemy attention and forces away. The desired end state is that the island's defenders lose the physical means or will to fight; there is no evidence of 30-percent damage. Which fire plan should the cell recommend for this window?",
     "options": [
-      "Plan 1: diversion; Plan 2: disruption; end state: defeat",
-      "Plan 1: disruption; Plan 2: defeat; end state: destruction",
-      "Plan 1: disruption; Plan 2: diversion; end state: defeat",
-      "Plan 1: defeat; Plan 2: diversion; end state: destruction"
+      "Use route fires as diversion, the island feint as disruption, and report defeat only after 30-percent damage.",
+      "Concentrate all fires on destroying the reserves, omit the feint, and call any withdrawal defeat.",
+      "Use fires with terrain and obstacles to disrupt reserve timing, the feint to divert forces from the landing, and loss of means or will to judge defeat.",
+      "Call the route fires defeat, use the feint for diversion, and report destruction if defenders cease resisting."
     ],
     "answer": 2,
-    "explanation": "Slide 28 describes disruption as integrating fires, terrain, and obstacles to upset formation or tempo and cause piecemeal commitment; diversion as drawing enemy attention and forces from the principal operation; and defeat as the enemy's temporary or permanent loss of the physical means or will to fight. Slide 25 describes destruction by physical combat-ineffectiveness and a computed damage threshold, not by loss of the will to fight.",
+    "explanation": "Slide 28 supports using fires with terrain and obstacles to disrupt reserve tempo during the short window, a feint to divert attention and forces from the landing, and loss of physical means or will to judge defeat. Slide 25 requires physical combat-ineffectiveness and at least 30-percent computed damage for destruction, which the scenario does not establish. A withdrawal alone does not establish defeat.",
     "tags": ["disrupt", "diversion", "defeat", "destroy"],
     "sourceSlides": [25, 28]
   },
@@ -211,7 +211,7 @@
     "id": 14,
     "difficulty": "hard",
     "category": "Effects of Fires",
-    "prompt": "After a Philippine Army battalion's artillery preparation, the computed estimate for an enemy company shows 12-percent casualties and materiel damage. Observers then report that the company, with most of its weapons still intact, stopped resisting and withdrew from the objective. The brigade asks how to report the effect. Which label is best supported?",
+    "prompt": "After a Philippine Army battalion's artillery preparation, the computed estimate for an enemy company shows 12-percent casualties and materiel damage. Observers report that the company withdrew from the objective with most weapons still serviceable. Intercepted orders then direct its surviving crews to resume resistance, but the crews refuse and say they will no longer fight. The brigade asks how to report the effect. Which label is best supported?",
     "options": [
       "Destruction, because giving up the objective shows the company is out of action for a long period",
       "Diversion, because the company's attention and forces were drawn away from the objective",
@@ -219,7 +219,7 @@
       "Defeat, because the company has lost the will to fight"
     ],
     "answer": 3,
-    "explanation": "Slide 28 describes defeat as the enemy's temporary or permanent loss of the physical means or will to fight, which the company showed by ceasing resistance while keeping most of its weapons. Slide 25 describes destruction as physically rendering a force combat-ineffective, and its computed destruction requires at least 30 percent, which 12 percent does not reach. Diversion concerns drawing attention from a principal operation, and slide 27's suppression minimum says nothing about why the company quit.",
+    "explanation": "Slide 28 describes defeat as temporary or permanent loss of the physical means or will to fight. The crews' explicit refusal to resume resistance despite serviceable weapons supplies evidence of lost will; withdrawal alone would not. Slide 25 requires physical combat-ineffectiveness and at least 30-percent computed damage for destruction, which the 12-percent estimate does not reach. Diversion concerns drawing attention from a principal operation, while suppression describes temporary degraded performance rather than this stated refusal.",
     "tags": ["defeat", "destroy", "30-percent computed-effect threshold", "diversion", "suppress", "observers and collectors"],
     "sourceSlides": [25, 27, 28]
   },
@@ -307,15 +307,15 @@
     "id": 20,
     "difficulty": "hard",
     "category": "FA System Elements and Responsibilities",
-    "prompt": "In a large Philippine Army multi-brigade operation, artillery observers, sound-and-flash reports, and drone imagery flood the artillery net with target information. A planning cell must assign three duties in order: collecting target information as part of Headquarters and Headquarters Battery, serving as the principal unit in artillery intelligence, and converting observer calls for fire into fire commands. Which assignment follows the lesson?",
+    "prompt": "In a large Philippine Army multi-brigade operation, an observer's sound-and-flash location and drone imagery point to different enemy firing positions. Brigade wants fire commands quickly, but an inaccurate location would waste the short fire-support window. Which response resolves the conflicting target information while keeping artillery-intelligence work and call-for-fire conversion with the appropriate elements?",
     "options": [
-      "Target Acquisition Platoon; fire direction center; FA Regiment and FA Bn Intelligence Office",
-      "Signal Platoon; FA Regiment and FA Bn Intelligence Office; fire direction center",
-      "Target Acquisition Platoon; FA Regiment and FA Bn Intelligence Office; fire direction center",
-      "FA Regiment and FA Bn Intelligence Office; Target Acquisition Platoon; fire direction center"
+      "Have the fire direction center reconcile the locations, then make the Target Acquisition Platoon convert the observer's call while the intelligence office only relays reports.",
+      "Have the Signal Platoon determine the target location, the intelligence office convert the call, and the fire direction center relay the resulting commands.",
+      "Use the Target Acquisition Platoon to collect, process, and disseminate accurately located target information; the FA Regiment and FA Bn Intelligence Office remains the principal artillery-intelligence unit in this large operation, then the fire direction center converts the observer's call into commands.",
+      "Send the first drone image straight to the fire direction center for commands and resolve the conflicting location later through the acquisition platoon and intelligence office."
     ],
     "answer": 2,
-    "explanation": "Slide 33 places the Target Acquisition Platoon under Headquarters and Headquarters Battery as part of artillery target intelligence and names the Intelligence Office of the FA Regiment and FA Bn as the principal unit in artillery intelligence in large operations. Slide 34 makes the fire direction center responsible for converting the observer's call for fire into fire commands.",
+    "explanation": "Slide 33 requires timely and accurate target detection, identification, and location; it places the Target Acquisition Platoon under Headquarters and Headquarters Battery to collect, process, and disseminate target intelligence and names the FA Regiment and FA Bn Intelligence Office as the principal artillery-intelligence unit in large operations. Resolving the conflicting locations through that acquisition chain preserves accuracy. Slide 34 assigns conversion of the observer's call for fire into commands to the fire direction center, after the target information is coherent.",
     "tags": ["target acquisition", "Target Acquisition Platoon", "FA intelligence", "FA Regiment and FA Bn intelligence office", "observers and collectors", "drones and vertical imagery", "fire direction center", "call-for-fire conversion", "Headquarters and Headquarters Battery"],
     "sourceSlides": [33, 34]
   },
