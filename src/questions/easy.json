@@ -150,10 +150,10 @@
     "tags": ["classification by transport", "self-propelled"],
     "prompt": "For a Philippine Army equipment briefing, a student labels an artillery weapon mounted on its own powered vehicle as towed merely because it travels by road. Which revision best follows the lesson's transport classification?",
     "options": [
-      "Classify it as self-propelled under means of transport.",
-      "Keep it as towed because road movement determines that category.",
-      "Classify it as aerial because artillery may move between islands.",
-      "Replace the transport entry with heavy, regardless of its caliber."
+      "Classify it as self-propelled because the weapon has its own powered mounting.",
+      "Keep it as towed because a vehicle supplies the power to move the mounted weapon.",
+      "List it as both towed and self-propelled because the gun and vehicle have separate functions.",
+      "Leave its transport class undecided until its next movement route is known."
     ],
     "answer": 0,
     "explanation": "Slides 21-24 distinguish towed, self-propelled, and aerial transport. Slide 23 illustrates a weapon mounted on a powered vehicle as self-propelled; road travel alone does not make it towed.",
@@ -180,15 +180,15 @@
     "difficulty": "easy",
     "category": "Effects of Fires",
     "tags": ["neutralize", "10-percent computed-effect threshold"],
-    "prompt": "A Philippine Army exercise assessment says enemy personnel and materiel became incapable of interfering with one particular operation, but only for a short period. Which effect most precisely matches that stated purpose?",
+    "prompt": "A Philippine Army exercise report records that opposing troops stopped firing while a friendly movement was completed, then resumed shortly afterward. The report concludes that the opposing force was permanently destroyed. Which correction is supported by the recorded results?",
     "options": [
-      "Destroy, requiring long-term or permanent ineffectiveness.",
-      "Neutralize, preventing interference with the particular operation.",
-      "Diversion, drawing attention away from the principal operation.",
-      "Disrupt, upsetting the enemy's formation or timetable."
+      "Retain destruction: completion of the friendly movement establishes a permanent effect.",
+      "Record neutralization for that operation: the later resumption does not support permanent destruction.",
+      "Record diversion: the temporary halt establishes that enemy attention shifted elsewhere.",
+      "Record disruption: the temporary halt establishes that enemy forces committed piecemeal."
     ],
     "answer": 1,
-    "explanation": "Slide 26 ties neutralization to making personnel or materiel incapable of interfering with a particular operation. Its computed effect is short-term ineffectiveness with at least 10-percent casualties or materiel damage.",
+    "explanation": "The troops did not interfere during the recorded movement, but resumed firing afterward. That supports the operation-specific, temporary effect of neutralization in slide 26 rather than permanent destruction. Slide 26's computed-effect threshold is at least 10-percent casualties or materiel damage; the report does not provide a casualty estimate.",
     "sourceSlides": [26]
   },
   {
@@ -228,12 +228,12 @@
     "difficulty": "easy",
     "category": "Philippine Operational Environment",
     "tags": ["Philippine archipelago", "rapid displacement between islands"],
-    "prompt": "A Philippine Army staff exercise expands from one island to another, but its mobility review considers movement within a single land area only. Which feature of the operating environment most directly exposes this gap?",
+    "prompt": "A Philippine Army staff exercise expands from one island to another, but its mobility review considers movement within a single land area only. Which correction best addresses the gap in the review?",
     "options": [
-      "The caliber bands used to classify artillery weapons by size.",
-      "The Philippine archipelago's distinct land features and need for movement between islands.",
-      "The distinction between voice and digital artillery communications.",
-      "The difference between close support and counterfires."
+      "Measure rapid movement between positions on the original island as proof of inter-island readiness.",
+      "Include rapid movement between islands while maintaining continuity of the ongoing operation.",
+      "Add inter-island travel speed as the requirement, leaving operational interruptions outside the review.",
+      "Require artillery to remain on the original island until operations there have completely ended."
     ],
     "answer": 1,
     "explanation": "Slide 29 says the Philippine archipelago and its distinct land features require artillery capable of rapid displacement between areas or islands without disrupting multidimensional operations.",
@@ -374,10 +374,10 @@
     "tags": ["employment tactics", "offensive positioning"],
     "prompt": "In a Philippine Army map-exercise review, artillery is described as positioned well forward to support an attack and exploit weapon range. Which explanation best matches the lesson's reason for this broad employment pattern?",
     "options": [
-      "It reflects a defensive posture intended to preserve fires after enemy penetration.",
-      "It reflects the offensive mission of the supported unit.",
-      "It follows automatically from the weapons being classified as medium caliber.",
-      "It follows automatically from the use of digital communications."
+      "It applies the defensive rationale of preserving fires after enemy penetration to a forward position.",
+      "It follows the supported unit's offensive mission by supporting the attack and exploiting weapon range.",
+      "It treats exploiting weapon range as sufficient reason for the same forward posture in offense and defense.",
+      "It treats proximity to the supported unit as the requirement for continuity of fires in every mission."
     ],
     "answer": 1,
     "explanation": "Slide 38 says the supported unit's mission dictates artillery employment. It associates well-forward positioning to support an attack and exploit range with the offense.",
