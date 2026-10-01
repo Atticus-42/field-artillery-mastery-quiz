@@ -1,20 +1,22 @@
 // Class score history for the quiz sites. Deploy as a Web app (Execute as: Me, Who has access: Anyone).
 // One spreadsheet serves every lesson quiz: each lesson has its own tab (see LESSONS).
 // POST (Content-Type text/plain) body: {"lesson","name","mode","score","total","percent","band","finishedAt"}
-// GET  ?lesson=isr|armor|fieldartillery|armyops&mode=all|easy|medium|hard&limit=100  ->  {"ok":true,"rows":[...newest first]}
+// GET  ?lesson=isr|armor|fieldartillery|armyops|combined&mode=all|easy|medium|hard&limit=100  ->  {"ok":true,"rows":[...newest first]}
 // A request without "lesson" is treated as the first lesson ('isr'), so older quiz pages keep working.
 
 var LESSONS = {
   isr: 'History',        // first quiz: ISR Operations (original tab name kept)
   armor: 'Armor History',                  // Fundamentals of Armor Operations quiz
   fieldartillery: 'Field Artillery History', // Field Artillery Operations quiz
-  armyops: 'Army Operations History'         // Introduction to Army Operations quiz; add more lines here for future lessons
+  armyops: 'Army Operations History',        // Introduction to Army Operations quiz
+  combined: 'Combined Exam History'          // 30-question exam drawn from all lessons; add more lines here for future lessons
 };
+var TOTALS = { combined: 30 };               // questions per attempt; lessons not listed use DEFAULT_TOTAL
+var DEFAULT_TOTAL = 25;
 var DEFAULT_LESSON = 'isr';
 var HEADERS = ['Received', 'Name', 'Mode', 'Score', 'Total', 'Percent', 'Band', 'Finished'];
 var MODES = ['easy', 'medium', 'hard'];
 var BANDS = ['Mastery', 'Proficient', 'Developing', 'Needs review'];
-var TOTAL = 25;
 var MAX_LIMIT = 200;
 
 function doPost(e) {
@@ -22,13 +24,14 @@ function doPost(e) {
     var data = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var tab = tabFor(data.lesson);
     if (!tab) return reply({ ok: false, error: 'unknown lesson' });
+    var total = totalFor(data.lesson);
     var name = cleanName(data.name);
     var mode = String(data.mode || '').toLowerCase();
     var score = Number(data.score);
     if (name.length < 2 || name.length > 40) return reply({ ok: false, error: 'name must be 2-40 characters' });
     if (MODES.indexOf(mode) === -1) return reply({ ok: false, error: 'invalid mode' });
-    if (!isInteger(score) || score < 0 || score > TOTAL) return reply({ ok: false, error: 'invalid score' });
-    var percent = Math.round((score / TOTAL) * 100);
+    if (!isInteger(score) || score < 0 || score > total) return reply({ ok: false, error: 'invalid score' });
+    var percent = Math.round((score / total) * 100);
     var band = BANDS.indexOf(data.band) === -1 ? '' : data.band;
     var finished = new Date(data.finishedAt);
     if (isNaN(finished.getTime())) finished = new Date();
@@ -36,7 +39,7 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try {
-      sheet(tab).appendRow([new Date(), name, mode, score, TOTAL, percent, band, finished]);
+      sheet(tab).appendRow([new Date(), name, mode, score, total, percent, band, finished]);
     } finally {
       lock.releaseLock();
     }
@@ -68,6 +71,11 @@ function doGet(e) {
     });
   }
   return reply({ ok: true, rows: rows });
+}
+
+function totalFor(lesson) {
+  var key = String(lesson || DEFAULT_LESSON).toLowerCase();
+  return TOTALS.hasOwnProperty(key) ? TOTALS[key] : DEFAULT_TOTAL;
 }
 
 // Only lessons listed in LESSONS are accepted, so callers cannot create arbitrary tabs.
