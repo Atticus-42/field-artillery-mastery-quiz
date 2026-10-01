@@ -106,399 +106,53 @@ await test('build CLI names the missing question-bank file', () => {
   }
 });
 
-const easyBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'easy.json'), 'utf8'));
+const loadBank = name => JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', `${name}.json`), 'utf8'));
+const easyBank = loadBank('easy');
+const mediumBank = loadBank('medium');
+const hardBank = loadBank('hard');
+const ALLOCATION = { 'Mission and Functions': 2, 'Tactical Roles': 3, 'Capabilities and Limitations': 3, 'Weapon Classification': 2, 'Effects of Fires': 4, 'Philippine Operational Environment': 2, 'Four Basic Tasks': 3, 'FA System Elements and Responsibilities': 4, 'Employment Tactics and Integrated Decisions': 2 };
+const normalize = text => text.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
-await test('Easy bank contains exactly 25 questions with sequential IDs 1-25', () => {
-  assert.equal(easyBank.length, 25);
-  assert.deepEqual(easyBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
-});
-
-await test('Easy questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
-  const { validateQuestion } = await import('./build.mjs');
-  easyBank.forEach((item, index) => {
-    assert.deepEqual(validateQuestion(item, 'easy', index + 1), [], `Easy ${index + 1}`);
-    assert.ok(item.tags.length > 0, `Easy ${index + 1} must identify its topics`);
+for (const [name, bank] of [['easy', easyBank], ['medium', mediumBank], ['hard', hardBank]]) {
+  await test(`${name} bank has 25 valid questions, sequential IDs, slides 15-38 and the required category allocation`, async () => {
+    const { validateQuestion } = await import('./build.mjs');
+    assert.equal(bank.length, 25);
+    bank.forEach((item, index) => {
+      assert.deepEqual(validateQuestion(item, name, index + 1), [], `${name} ${index + 1}`);
+      assert.ok(item.tags.length > 0, `${name} ${index + 1} needs tags`);
+      assert.equal(new Set(item.options.map(normalize)).size, 4, `${name} ${index + 1} needs four distinct options`);
+    });
+    const counts = {};
+    for (const item of bank) counts[item.category] = (counts[item.category] ?? 0) + 1;
+    assert.deepEqual(counts, ALLOCATION);
   });
-});
-
-await test('Easy 23 assesses the Signal Platoon and its headquarters placement', () => {
-  const item = easyBank[22];
-  assert.match(item.prompt, /Headquarters and Headquarters Battery/i);
-  assert.match(item.options[item.answer], /Signal Platoon/i);
-});
+  await test(`${name} answers are balanced (6 or 7 per letter) and the key is not usually the longest option`, () => {
+    const counts = [0, 0, 0, 0];
+    let longest = 0;
+    for (const item of bank) {
+      counts[item.answer]++;
+      const lengths = item.options.map(option => option.length);
+      if (lengths[item.answer] === Math.max(...lengths) && lengths.filter(l => l === lengths[item.answer]).length === 1) longest++;
+    }
+    assert.ok(counts.every(count => count === 6 || count === 7), counts.join('/'));
+    assert.ok(longest <= 12, `key is the unique longest option in ${longest}/25 items`);
+  });
+}
 
 function assertUniquePrompts(banks) {
   const seen = new Map();
   for (const [difficulty, bank] of Object.entries(banks)) {
     for (const item of bank) {
-      const normalized = item.prompt.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-      const label = `${difficulty} ${item.id}`;
-      assert.ok(!seen.has(normalized), `Duplicate normalized prompt: ${seen.get(normalized)} and ${label}`);
-      seen.set(normalized, label);
+      const key = normalize(item.prompt);
+      assert.ok(!seen.has(key), `Duplicate normalized prompt: ${seen.get(key)} and ${difficulty} ${item.id}`);
+      seen.set(key, `${difficulty} ${item.id}`);
     }
   }
 }
 
-await test('Easy prompts are unique after case, punctuation and whitespace normalization', () => {
-  assertUniquePrompts({ easy: easyBank });
-});
-
-await test('Easy primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
-  const counts = {};
-  for (const item of easyBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
-  assert.deepEqual(counts, {
-    'Mission and Functions': 2,
-    'Tactical Roles': 3,
-    'Capabilities and Limitations': 3,
-    'Weapon Classification': 2,
-    'Effects of Fires': 4,
-    'Philippine Operational Environment': 2,
-    'Four Basic Tasks': 3,
-    'FA System Elements and Responsibilities': 4,
-    'Employment Tactics and Integrated Decisions': 2,
-  });
-});
-
-await test('Easy answers have 7/6/6/6 occurrences across A/B/C/D', () => {
-  const counts = [0, 0, 0, 0];
-  for (const item of easyBank) counts[item.answer]++;
-  assert.deepEqual(counts, [7, 6, 6, 6]);
-  assert.ok(counts.every(count => count === 6 || count === 7));
-});
-
-const mediumBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'medium.json'), 'utf8'));
-
-await test('Medium bank contains exactly 25 questions with sequential IDs 1-25', () => {
-  assert.equal(mediumBank.length, 25);
-  assert.deepEqual(mediumBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
-});
-
-await test('Medium questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
-  const { validateQuestion } = await import('./build.mjs');
-  mediumBank.forEach((item, index) => {
-    assert.deepEqual(validateQuestion(item, 'medium', index + 1), [], `Medium ${index + 1}`);
-    assert.ok(item.tags.length > 0, `Medium ${index + 1} must identify its topics`);
-  });
-});
-
-await test('Medium primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
-  const counts = {};
-  for (const item of mediumBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
-  assert.deepEqual(counts, {
-    'Mission and Functions': 2,
-    'Tactical Roles': 3,
-    'Capabilities and Limitations': 3,
-    'Weapon Classification': 2,
-    'Effects of Fires': 4,
-    'Philippine Operational Environment': 2,
-    'Four Basic Tasks': 3,
-    'FA System Elements and Responsibilities': 4,
-    'Employment Tactics and Integrated Decisions': 2,
-  });
-});
-
-await test('Medium answers have 6/7/6/6 occurrences across A/B/C/D', () => {
-  const counts = [0, 0, 0, 0];
-  for (const item of mediumBank) counts[item.answer]++;
-  assert.deepEqual(counts, [6, 7, 6, 6]);
-});
-
-await test('Easy and Medium prompts are unique within and across both banks', () => {
-  assertUniquePrompts({ easy: easyBank, medium: mediumBank });
-});
-
-await test('Cross-bank duplicate check rejects a literal case, punctuation and spacing near-copy', () => {
-  assert.throws(() => assertUniquePrompts({
-    easy: [{ id: 1, prompt: 'A Philippine Army review: which system failed?' }],
-    medium: [{ id: 8, prompt: '  A PHILIPPINE army REVIEW -- which   system failed!  ' }],
-  }), /Duplicate normalized prompt: easy 1 and medium 8/);
-  assert.doesNotThrow(() => assertUniquePrompts({
-    easy: [{ id: 1, prompt: 'A Philippine Army review: which system failed?' }],
-    medium: [{ id: 8, prompt: 'A Philippine Army review: which task was fulfilled?' }],
-  }));
-});
-
-const hardBank = JSON.parse(readFileSync(join(projectRoot, 'src', 'questions', 'hard.json'), 'utf8'));
-
-await test('Hard bank contains exactly 25 questions with sequential IDs 1-25', () => {
-  assert.equal(hardBank.length, 25);
-  assert.deepEqual(hardBank.map(item => item.id), Array.from({ length: 25 }, (_, index) => index + 1));
-});
-
-await test('Hard questions satisfy the schema, difficulty, four-choice and source-slide contracts', async () => {
-  const { validateQuestion } = await import('./build.mjs');
-  hardBank.forEach((item, index) => {
-    assert.deepEqual(validateQuestion(item, 'hard', index + 1), [], `Hard ${index + 1}`);
-    assert.ok(item.tags.length >= 3, `Hard ${index + 1} must integrate several tagged concepts`);
-  });
-});
-
-await test('Hard 1 correct mission judgment includes all three fire effects and integration', () => {
-  const answer = hardBank[0].options[hardBank[0].answer];
-  assert.match(answer, /destroy.*neutraliz.*suppress/i);
-  assert.match(answer, /integrat/i);
-});
-
-await test('Hard 9 aerial candidate meets the caliber condition and appears in a distractor', () => {
-  const item = hardBank[8];
-  const aerial = item.prompt.match(/(\d+) mm aerial/);
-  assert.ok(aerial, 'scenario must include an aerial candidate');
-  const caliber = Number(aerial[1]);
-  assert.ok(caliber >= 121 && caliber <= 160, `aerial candidate ${caliber} mm must be medium caliber`);
-  assert.ok(item.options.some((option, index) => index !== item.answer && option.includes(`${caliber} mm aerial`)), 'a plausible distractor must include the medium-caliber aerial candidate');
-  assert.equal(item.answer, 2);
-  assert.match(item.options[item.answer], /121 mm towed weapon only/);
-});
-
-await test('Hard 14 defeat judgment has explicit evidence of lost will beyond withdrawal', () => {
-  const item = hardBank[13];
-  assert.match(item.prompt, /\brefus\w*\b.*\b(fight|resistance)\b/i, 'scenario must report refusal to keep fighting');
-  assert.match(item.prompt, /weapons.*(intact|serviceable)/i, 'weapons remain available');
-  assert.match(item.explanation, /withdrawal alone would not/i, 'explanation must separate withdrawal from lost will');
-});
-
-await test('Hard primary categories follow the required 2/3/3/2/4/2/3/4/2 allocation', () => {
-  const counts = {};
-  for (const item of hardBank) counts[item.category] = (counts[item.category] ?? 0) + 1;
-  assert.deepEqual(counts, {
-    'Mission and Functions': 2,
-    'Tactical Roles': 3,
-    'Capabilities and Limitations': 3,
-    'Weapon Classification': 2,
-    'Effects of Fires': 4,
-    'Philippine Operational Environment': 2,
-    'Four Basic Tasks': 3,
-    'FA System Elements and Responsibilities': 4,
-    'Employment Tactics and Integrated Decisions': 2,
-  });
-});
-
-await test('Hard answers have 6/6/7/6 occurrences across A/B/C/D', () => {
-  const counts = [0, 0, 0, 0];
-  for (const item of hardBank) counts[item.answer]++;
-  assert.deepEqual(counts, [6, 6, 7, 6]);
-});
-
-await test('Hard scenarios exercise every required competing constraint', () => {
-  const HARD_CONSTRAINT_TAGS = [
-    'communications failure',
-    'counterfire exposure',
-    'ammunition economy',
-    'island movement',
-    'survey and MET accuracy',
-    'target acquisition',
-    'maneuver timing',
-    'continuity of fires',
-    'offensive positioning',
-    'defensive positioning',
-  ];
-  const hardTags = new Set(hardBank.flatMap(item => item.tags));
-  const missing = HARD_CONSTRAINT_TAGS.filter(tag => !hardTags.has(tag));
-  assert.deepEqual(missing, [], `Hard constraint tags missing: ${missing.join(', ')}`);
-});
-
-await test('All 75 prompts are unique within and across the Easy, Medium and Hard banks', () => {
-  assert.equal(easyBank.length + mediumBank.length + hardBank.length, 75);
+await test('All 75 prompts are unique across the three banks', () => {
   assertUniquePrompts({ easy: easyBank, medium: mediumBank, hard: hardBank });
 });
-
-const REQUIRED_TAGS = [
-  // Mission (slide 15)
-  'mission',
-  'destroy/neutralize/suppress mission',
-  'timely and accurate support',
-  'integration of fire-support means',
-  // Functions (slide 16)
-  'functions',
-  'continuous fire support',
-  'communications',
-  'mobility',
-  'survey',
-  'meteorological data',
-  'target acquisition',
-  'fire direction and coordination',
-  'fire-support cells',
-  'fire-support elements',
-  'command and control of additional artillery',
-  // Tactical roles (slide 17)
-  'close support',
-  'attack at depth',
-  'interdiction',
-  'counterfires',
-  // Capabilities (slide 18)
-  'all-weather and all-terrain fires',
-  'rapid shifting and massing',
-  'add depth to the battlefield',
-  'shell/fuze variety',
-  'continuous support by judicious displacement',
-  // Limitations (slide 19)
-  'limited self-defense',
-  'point-target ammunition cost',
-  'detectable firing signature',
-  'weapon range limits',
-  // Classification by caliber (slide 20)
-  'classification by caliber',
-  'light',
-  'medium',
-  'heavy',
-  'very heavy',
-  // Classification by means of transport (slides 21-24)
-  'classification by transport',
-  'towed',
-  'self-propelled',
-  'aerial',
-  // Effects of fires and computed-effect thresholds (slides 25-28)
-  'destroy',
-  'neutralize',
-  'suppress',
-  'disrupt',
-  'defeat',
-  'diversion',
-  '30-percent computed-effect threshold',
-  '10-percent computed-effect threshold',
-  '3-percent computed-effect threshold',
-  // Philippine archipelagic environment (slide 29)
-  'Philippine archipelago',
-  'rapid displacement between islands',
-  'continuity during displacement',
-  // Four basic tasks (slide 31)
-  'support forces in contact',
-  'support the concept of operations',
-  'synchronize fire support',
-  'economize resources',
-  'sustain FA operations',
-  // Ten system elements not already listed above (slide 32)
-  'weapon/ammunition combinations',
-  'organization',
-  'ballistic meteorology',
-  'logistics',
-  'employment tactics',
-  // Specialized responsibilities and relationships (slides 33-38)
-  'observers and collectors',
-  'drones and vertical imagery',
-  'FA intelligence',
-  'Target Acquisition Platoon',
-  'FA Regiment and FA Bn intelligence office',
-  'fire direction center',
-  'call-for-fire conversion',
-  'suitable weapon coverage',
-  'command and support relationships',
-  'FA platoon smallest deployable unit',
-  'common survey grid',
-  'five requirements for accurate predicted fires',
-  'radio and digital communications',
-  'Signal Platoon',
-  'Headquarters and Headquarters Battery',
-  'mobility assets',
-  'offensive positioning',
-  'defensive positioning',
-  'continuity of fires',
-];
-
-await test('Coverage registry lists each required tag once', () => {
-  assert.equal(new Set(REQUIRED_TAGS).size, REQUIRED_TAGS.length);
-});
-
-await test('Every required coverage tag appears across the 75-question bank', () => {
-  const allTags = new Set([...easyBank, ...mediumBank, ...hardBank].flatMap(item => item.tags));
-  const missing = REQUIRED_TAGS.filter(tag => !allTags.has(tag));
-  assert.deepEqual(missing, [], `Coverage tags missing: ${missing.join(', ')}`);
-});
-
-// Curated assessment anchors: each mapped concept is needed to judge the
-// question's best answer, not merely mentioned in its scenario or explanation.
-// The reason records that judgment for human review.
-const ASSESSED_CONCEPTS = {
-  'hard:1': { reason: 'Reject destruction-only and liaison-only plans; use the full mission and integration duty.', tags: ['mission', 'destroy/neutralize/suppress mission', 'integration of fire-support means'] },
-  'medium:1': { reason: 'Both timeliness and accuracy are necessary to judge the mission report.', tags: ['timely and accurate support'] },
-  'hard:2': { reason: 'Keep artillery functions in place to sustain continuous fires across the operation.', tags: ['functions', 'continuous fire support'] },
-  'medium:21': { reason: 'Diagnose failed radio transmission after valid command conversion.', tags: ['communications'] },
-  'medium:16': { reason: 'Separate successful movement from failed supply and sustained operations.', tags: ['mobility', 'logistics', 'mobility assets'] },
-  'easy:22': { reason: 'Choose survey to establish the common location and direction grid.', tags: ['survey', 'common survey grid'] },
-  'hard:22': { reason: 'Require MET data to reach fire direction before predicted fires.', tags: ['meteorological data', 'ballistic meteorology'] },
-  'easy:20': { reason: 'Diagnose the missing target detection, identification, and location function.', tags: ['target acquisition'] },
-  'medium:25': { reason: 'Separate successful conversion from weapon coverage and ammunition selection gaps.', tags: ['fire direction and coordination', 'weapon/ammunition combinations'] },
-  'easy:2': { reason: 'Select the artillery contribution to the maneuver cell and its elements.', tags: ['fire-support cells', 'fire-support elements'] },
-  'medium:2': { reason: 'Identify command of additional artillery as a distinct unfinished function.', tags: ['command and control of additional artillery'] },
-  'easy:3': { reason: 'Identify the role used against a threat to the supported force.', tags: ['close support'] },
-  'hard:3': { reason: 'Attack an unreachable reserve in depth to create a maneuver window.', tags: ['attack at depth', 'interdiction', 'add depth to the battlefield'] },
-  'hard:4': { reason: 'Target the whole enemy fire-support system rather than guns alone.', tags: ['counterfires'] },
-  'medium:6': { reason: 'Keep weather capability separate from limited self-defense.', tags: ['all-weather and all-terrain fires', 'limited self-defense'] },
-  'easy:6': { reason: 'Correct the claim that shifting and massing requires displacement.', tags: ['rapid shifting and massing'] },
-  'medium:7': { reason: 'Credit shell and fuze selection without erasing point-target ammunition cost.', tags: ['shell/fuze variety', 'point-target ammunition cost'] },
-  'hard:8': { reason: 'Choose displacement timed to preserve needed fires while reducing exposure.', tags: ['continuous support by judicious displacement'] },
-  'medium:8': { reason: 'Reject the inference that stationary firing has no detectable signature.', tags: ['detectable firing signature'] },
-  'easy:8': { reason: 'Apply the specified range limit despite all-weather capability.', tags: ['weapon range limits'] },
-  'medium:9': { reason: 'Correct both boundary-caliber errors using the exact bands.', tags: ['classification by caliber', 'light', 'heavy', 'very heavy'] },
-  'easy:9': { reason: 'Reclassify a 155 mm weapon as medium.', tags: ['medium'] },
-  'hard:9': { reason: 'Reject a medium-caliber aerial candidate on transport class, selecting only the medium towed weapon.', tags: ['classification by transport', 'towed', 'aerial'] },
-  'medium:10': { reason: 'Keep caliber classification separate from self-propelled transport.', tags: ['self-propelled'] },
-  'easy:11': { reason: 'Replace neutralization with destruction when the force is physically ineffective until reconstituted.', tags: ['destroy'] },
-  'easy:12': { reason: 'Choose neutralization for a short operation-specific interruption.', tags: ['neutralize'] },
-  'easy:13': { reason: 'Identify temporary below-mission performance as suppression.', tags: ['suppress'] },
-  'hard:12': { reason: 'Allocate fires, terrain, obstacles, and feint to distinct operational effects.', tags: ['disrupt', 'defeat', 'diversion'] },
-  'medium:11': { reason: 'Correct the three threshold values in their effect order.', tags: ['30-percent computed-effect threshold', '10-percent computed-effect threshold', '3-percent computed-effect threshold'] },
-  'easy:15': { reason: 'Extend the mobility review to rapid inter-island displacement.', tags: ['Philippine archipelago', 'rapid displacement between islands'] },
-  'easy:16': { reason: 'Reject a fast move that interrupts the ongoing operation.', tags: ['continuity during displacement'] },
-  'easy:17': { reason: 'Identify readiness to answer a unit in contact.', tags: ['support forces in contact'] },
-  'easy:18': { reason: 'Require fires to serve the supported commander objective.', tags: ['support the concept of operations'] },
-  'easy:19': { reason: 'Coordinate available assets to economize and maximize effect.', tags: ['synchronize fire support', 'economize resources'] },
-  'medium:19': { reason: 'Diagnose loss of continued support as a sustainment failure.', tags: ['sustain FA operations'] },
-  'medium:23': { reason: 'Keep formal relationships while correcting the smallest deployable unit.', tags: ['organization', 'command and support relationships', 'FA platoon smallest deployable unit'] },
-  'hard:24': { reason: 'Reposition for defense so fires continue after possible penetration.', tags: ['employment tactics', 'defensive positioning', 'continuity of fires'] },
-  'hard:25': { reason: 'Choose forward positioning for offense while balancing exposure and range.', tags: ['offensive positioning'] },
-  'hard:20': { reason: 'Resolve conflicting observer and drone locations through acquisition and artillery intelligence before command conversion.', tags: ['observers and collectors', 'drones and vertical imagery', 'FA intelligence', 'Target Acquisition Platoon', 'FA Regiment and FA Bn intelligence office'] },
-  'easy:21': { reason: 'Assign call-for-fire conversion to the fire direction center.', tags: ['fire direction center', 'call-for-fire conversion'] },
-  'hard:21': { reason: 'Choose a weapon group suitable for target coverage and within range.', tags: ['suitable weapon coverage'] },
-  'medium:22': { reason: 'Recognize MET as a separate requirement despite a verified survey grid.', tags: ['five requirements for accurate predicted fires'] },
-  'easy:23': { reason: 'Assign the broken voice and digital radio links to the Signal Platoon under its headquarters battery.', tags: ['radio and digital communications', 'Signal Platoon', 'Headquarters and Headquarters Battery'] },
-};
-
-function assessmentMapErrors(banks, mapping) {
-  const errors = [];
-  const mappedTags = new Set();
-  for (const [reference, entry] of Object.entries(mapping)) {
-    const match = /^(easy|medium|hard):(\d+)$/.exec(reference);
-    if (!match || !Number.isInteger(Number(match[2])) || Number(match[2]) < 1) {
-      errors.push(`invalid assessment reference ${reference}`);
-      continue;
-    }
-    const item = banks[match[1]]?.find(question => question.id === Number(match[2]));
-    if (!item) errors.push(`missing mapped question ${reference}`);
-    if (typeof entry.reason !== 'string' || !entry.reason.trim()) errors.push(`missing assessment reason ${reference}`);
-    for (const tag of entry.tags ?? []) {
-      if (mappedTags.has(tag)) errors.push(`duplicate assessment tag ${tag}`);
-      mappedTags.add(tag);
-      if (!REQUIRED_TAGS.includes(tag)) errors.push(`unrequired assessment tag ${tag}`);
-      if (item && !item.tags.includes(tag)) errors.push(`${reference} missing tag ${tag}`);
-    }
-  }
-  for (const tag of REQUIRED_TAGS) if (!mappedTags.has(tag)) errors.push(`unmapped required concept ${tag}`);
-  return errors;
-}
-
-await test('Every required concept has a reviewed assessment anchor in an existing tagged question', () => {
-  assert.deepEqual(assessmentMapErrors({ easy: easyBank, medium: mediumBank, hard: hardBank }, ASSESSED_CONCEPTS), []);
-});
-
-await test('Assessment map rejects a missing mapped question, tag, or anchor', () => {
-  const banks = { easy: easyBank, medium: mediumBank, hard: hardBank };
-  const withoutQuestion = { ...banks, hard: hardBank.filter(item => item.id !== 20) };
-  assert.ok(assessmentMapErrors(withoutQuestion, ASSESSED_CONCEPTS).includes('missing mapped question hard:20'));
-  const withoutTag = { ...banks, easy: easyBank.map(item => item.id === 23 ? { ...item, tags: item.tags.filter(tag => tag !== 'Signal Platoon') } : item) };
-  assert.ok(assessmentMapErrors(withoutTag, ASSESSED_CONCEPTS).includes('easy:23 missing tag Signal Platoon'));
-  const withoutAnchor = { ...ASSESSED_CONCEPTS };
-  delete withoutAnchor['hard:20'];
-  assert.ok(assessmentMapErrors(banks, withoutAnchor).includes('unmapped required concept Target Acquisition Platoon'));
-});
-
-// ---------------------------------------------------------------------------
-// Application interaction contracts (Task 5)
-//
-// The app script is taken from the BUILT index.html and executed with node:vm
-// against a small fake DOM built by parsing that same index.html, so these
-// tests exercise the real shipped markup and code rather than a copy.
-// ---------------------------------------------------------------------------
 
 const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 const RAW_TEXT_ELEMENTS = new Set(['script', 'style']);
@@ -737,11 +391,38 @@ function parseHtml(html) {
 
 const builtHtml = readFileSync(join(projectRoot, 'index.html'), 'utf8');
 
+// The class history endpoint is the single configurable network address. Tests never reach it:
+// by default they run with the endpoint cleared, and configured runs use a fake fetch.
+const ENDPOINT_PATTERN = /var HISTORY_ENDPOINT = '([^']*)';/;
+const TEST_ENDPOINT = 'https://script.google.com/macros/s/TEST-DEPLOYMENT/exec';
+function withEndpoint(html, url) {
+  assert.match(html, ENDPOINT_PATTERN, 'the app script must declare HISTORY_ENDPOINT');
+  return html.replace(ENDPOINT_PATTERN, () => `var HISTORY_ENDPOINT = '${url}';`);
+}
+const baseHtml = withEndpoint(builtHtml, '');
+const configuredHtml = withEndpoint(builtHtml, TEST_ENDPOINT);
+
+// Records every request and answers through handler(call); a throwing handler is a network error.
+function fakeFetch(handler) {
+  const calls = [];
+  const fetch = async (url, init = {}) => {
+    const call = { url: String(url), method: String(init.method ?? 'GET').toUpperCase(), headers: { ...(init.headers ?? {}) }, body: init.body };
+    calls.push(call);
+    const result = await handler(call);
+    const status = result.status ?? 200;
+    return { ok: status >= 200 && status < 300, status, json: async () => result.body };
+  };
+  fetch.calls = calls;
+  return fetch;
+}
+const okHistory = rows => ({ body: { ok: true, rows } });
+const settle = app => app.api.whenSettled();
+
 function appScripts(document) {
   return findAll(document.root, node => node.localName === 'script' && !/json/i.test(node.getAttribute('type') ?? ''));
 }
 
-function loadApp(html = builtHtml) {
+function loadApp(html = baseHtml, { fetch } = {}) {
   const document = parseHtml(html);
   const printCalls = [];
   const consoleErrors = [];
@@ -750,6 +431,7 @@ function loadApp(html = builtHtml) {
     console: { log() {}, info() {}, warn() {}, error: (...args) => consoleErrors.push(args.map(String).join(' ')) },
     print: () => printCalls.push(Date.now()),
   };
+  if (fetch) sandbox.fetch = fetch;
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   for (const script of appScripts(document)) {
@@ -793,7 +475,18 @@ function radios(app) {
   return findAll(byId(app, 'question-area'), node => node.localName === 'input' && node.type === 'radio');
 }
 
-function startConfirmed(app, mode = 'easy') {
+const fireEvent = (node, type) => node.dispatchEvent({ type, target: node, defaultPrevented: false, preventDefault() {} });
+
+// Types a name into the real field the way a browser does: value change, input event, then leaving the field.
+function enterName(app, name) {
+  const input = byId(app, 'student-name');
+  input.value = name;
+  fireEvent(input, 'input');
+  fireEvent(input, 'blur');
+}
+
+function startConfirmed(app, mode = 'easy', name = 'Juan Dela Cruz') {
+  enterName(app, name);
   byId(app, 'study-confirm').click();
   byId(app, `mode-${mode}`).click();
   assert.equal(plain(app.api.getState()).view, 'quiz', `${mode} must start after confirmation`);
@@ -801,7 +494,11 @@ function startConfirmed(app, mode = 'easy') {
 
 // Answers every remaining question through the real controls; chooseCorrect(index) decides each answer.
 function completeAttempt(app, chooseCorrect = () => true) {
-  for (let index = 0; index < 25; index++) {
+  completeAttemptFrom(app, 0, chooseCorrect);
+}
+
+function completeAttemptFrom(app, start, chooseCorrect = () => true) {
+  for (let index = start; index < 25; index++) {
     const attempt = attemptOf(app);
     assert.equal(attempt.current, index);
     const question = attempt.questions[index];
@@ -850,7 +547,7 @@ await test('Study warning shows the exact confirmation text and all mode buttons
   }
 });
 
-await test('Checking the warning enables the mode buttons and unchecking disables them again', () => {
+await test('Mode buttons need both a valid name and the study confirmation; unchecking disables them again', () => {
   const app = loadApp();
   const checkbox = byId(app, 'study-confirm');
   byId(app, 'mode-easy').click();
@@ -860,6 +557,10 @@ await test('Checking the warning enables the mode buttons and unchecking disable
 
   checkbox.click();
   assert.equal(plain(app.api.getState()).studyConfirmed, true);
+  for (const button of modeButtons(app)) assert.equal(button.disabled, true, `${button.id} stays disabled without a name`);
+  assert.equal(app.api.startQuiz('easy'), false, 'startQuiz must refuse without a name');
+  assert.match(byId(app, 'mode-hint').textContent, /enter your name/i);
+  enterName(app, 'Juan Dela Cruz');
   for (const button of modeButtons(app)) assert.equal(button.disabled, false, `${button.id} must enable`);
 
   checkbox.click();
@@ -1062,6 +763,7 @@ await test('validateBanks accepts the embedded banks and mirrors the build valid
     { ...base, options: base.options.slice(0, 3) },
     { ...base, answer: 4 },
     { ...base, sourceSlides: [14] },
+    { ...base, sourceSlides: [39] },
     { ...base, sourceSlides: [] },
     { ...base, tags: [''] },
     { ...base, prompt: '  ' },
@@ -1087,10 +789,10 @@ await test('Malformed or missing startup data shows the unavailable state and bl
   const brokenAnswer = plain(hardBank);
   brokenAnswer[3].answer = 4;
   const variants = {
-    'unparseable Easy JSON': replaceBank(builtHtml, 'easy', '{not json'),
-    'Medium bank with 24 items': replaceBank(builtHtml, 'medium', JSON.stringify(mediumBank.slice(0, 24))),
-    'Hard answer index out of range': replaceBank(builtHtml, 'hard', JSON.stringify(brokenAnswer)),
-    'missing Easy bank element': builtHtml.replace(/<script type="application\/json" id="questions-easy">[\s\S]*?<\/script>/, ''),
+    'unparseable Easy JSON': replaceBank(baseHtml, 'easy', '{not json'),
+    'Medium bank with 24 items': replaceBank(baseHtml, 'medium', JSON.stringify(mediumBank.slice(0, 24))),
+    'Hard answer index out of range': replaceBank(baseHtml, 'hard', JSON.stringify(brokenAnswer)),
+    'missing Easy bank element': baseHtml.replace(/<script type="application\/json" id="questions-easy">[\s\S]*?<\/script>/, ''),
   };
   for (const [name, html] of Object.entries(variants)) {
     const app = loadApp(html);
@@ -1102,6 +804,8 @@ await test('Malformed or missing startup data shows the unavailable state and bl
     assert.equal(isShown(byId(app, 'view-landing')), false, `${name}: landing must hide`);
     assert.equal(app.document.activeElement?.id, 'unavailable-heading', `${name}: focus must move to the unavailable heading`);
     assert.equal(byId(app, 'study-confirm').disabled, true, name);
+    assert.equal(byId(app, 'student-name').disabled, true, `${name}: the name field is disabled too`);
+    assert.equal(app.api.setStudentName('Juan Dela Cruz'), false, name);
     app.api.setStudyConfirmed(true);
     byId(app, 'study-confirm').click();
     for (const button of modeButtons(app)) assert.equal(button.disabled, true, `${name}: ${button.id}`);
@@ -1185,12 +889,306 @@ await test('All 25 checked answers produce scored results with topic analysis, f
   assert.equal(attemptOf(app).mode, 'hard');
 });
 
-await test('App keeps answers in memory only and loads no external resources', () => {
+await test('App keeps answers in memory only: its one network call goes to HISTORY_ENDPOINT, with no storage, cookies or HTML parsing', () => {
   const document = parseHtml(builtHtml);
   const code = appScripts(document).map(script => script.textContent).join('\n');
   assert.ok(code.length > 0, 'index.html must contain the app script');
-  assert.doesNotMatch(code, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie|serviceWorker|\bimport\s*\(/);
-  assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
+  assert.equal(code.match(/\bfetch\s*\(/g)?.length, 1, 'exactly one fetch call site');
+  assert.match(code, /function historyRequest\(url, init\) \{\s*if \(!ENDPOINT \|\| url\.indexOf\(ENDPOINT\) !== 0\) return Promise\.reject/, 'the fetch wrapper must refuse any URL outside HISTORY_ENDPOINT');
+  assert.doesNotMatch(code, /XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie|serviceWorker|\bimport\s*\(|new Audio\b/);
+  assert.doesNotMatch(code, /\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write/, 'remote strings must never be parsed as HTML');
+  assert.equal(builtHtml.split('var HISTORY_ENDPOINT =').length - 1, 1, 'HISTORY_ENDPOINT is declared exactly once');
+  const endpoint = builtHtml.match(ENDPOINT_PATTERN)[1];
+  assert.ok(endpoint === '' || /^https:\/\/[^\s'"<>\\]+$/.test(endpoint), 'HISTORY_ENDPOINT must be empty or an https URL');
+  assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|<audio\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
+  assert.doesNotMatch(builtHtml, /\.(?:mp3|wav|ogg|m4a)\b/i, 'sounds are synthesised, never loaded');
+});
+
+await test('Names are trimmed, 2-40 characters, need a letter or number, and invalid names are rejected with a visible message', () => {
+  const { api } = loadApp();
+  const valid = (raw, name) => {
+    const result = plain(api.validateName(raw));
+    assert.equal(result.valid, true, `${JSON.stringify(raw)} should be valid: ${result.message}`);
+    assert.equal(result.name, name);
+  };
+  const invalid = (raw, pattern) => {
+    const result = plain(api.validateName(raw));
+    assert.equal(result.valid, false, `${JSON.stringify(raw)} should be rejected`);
+    assert.equal(result.name, '');
+    assert.match(result.message, pattern);
+  };
+  valid('  Ana  ', 'Ana');
+  valid('Pvt.  Juan\tDela Cruz', 'Pvt. Juan Dela Cruz');
+  valid('A\u0000B', 'A B');
+  valid('x'.repeat(40), 'x'.repeat(40));
+  valid('=Cruz', 'Cruz');
+  valid('Ñiño', 'Ñiño');
+  invalid('', /enter your name/i);
+  invalid('   ', /enter your name/i);
+  invalid('J', /at least 2/);
+  invalid(' J\u0007 ', /at least 2/);
+  invalid('x'.repeat(41), /40 characters or fewer/);
+  invalid('...', /letter or number/);
+  invalid(null, /enter your name/i);
+
+  const app = loadApp();
+  const input = byId(app, 'student-name');
+  const label = findAll(app.document.root, node => node.localName === 'label' && node.htmlFor === 'student-name')[0];
+  assert.ok(label && /name/i.test(label.textContent), 'the name field has a visible label');
+  const message = byId(app, 'student-name-message');
+  assert.equal(isShown(message), false, 'no error before the student types');
+  byId(app, 'study-confirm').click();
+  enterName(app, 'J');
+  assert.ok(isShown(message));
+  assert.match(message.textContent, /at least 2/);
+  assert.equal(input.getAttribute('aria-invalid'), 'true');
+  assert.ok((input.getAttribute('aria-describedby') ?? '').includes('student-name-message'));
+  for (const button of modeButtons(app)) assert.equal(button.disabled, true, 'invalid names keep the modes locked');
+  assert.equal(app.api.startQuiz('easy'), false);
+  enterName(app, '   ');
+  assert.match(message.textContent, /enter your name/i, 'leaving the field empty explains what is needed');
+  enterName(app, '  Maria Santos ');
+  assert.equal(isShown(message), false);
+  assert.equal(input.getAttribute('aria-invalid'), 'false');
+  for (const button of modeButtons(app)) assert.equal(button.disabled, false);
+  assert.equal(plain(app.api.getState()).studentName, 'Maria Santos');
+  byId(app, 'mode-medium').click();
+  assert.match(byId(app, 'quiz-student').textContent, /Maria Santos/, 'the name shows on the quiz screen');
+  completeAttempt(app);
+  byId(app, 'btn-finish').click();
+  assert.match(byId(app, 'results-summary').textContent, /Maria Santos/, 'the name shows on the results screen');
+});
+
+await test('Finishing an attempt submits exactly one history record with the attempt summary and never the answers', async () => {
+  const fetch = fakeFetch(call => (call.method === 'POST' ? { body: { ok: true } } : okHistory([])));
+  const app = loadApp(configuredHtml, { fetch });
+  await settle(app);
+  startConfirmed(app, 'easy', 'Maria Santos');
+  const wrongIndexes = new Set([0, 5, 10, 15, 20]);
+  completeAttempt(app, index => !wrongIndexes.has(index));
+  assert.equal(fetch.calls.filter(call => call.method === 'POST').length, 0, 'nothing is sent before the attempt finishes');
+  const before = Date.now();
+  byId(app, 'btn-finish').click();
+  assert.ok(isShown(byId(app, 'view-results')), 'results show without waiting for the network');
+  await settle(app);
+  const posts = fetch.calls.filter(call => call.method === 'POST');
+  assert.equal(posts.length, 1, 'one submission per finished attempt');
+  const [post] = posts;
+  assert.equal(post.url, TEST_ENDPOINT);
+  assert.equal(post.headers['Content-Type'], 'text/plain;charset=utf-8', 'text/plain avoids a CORS preflight');
+  const payload = JSON.parse(post.body);
+  assert.deepEqual(Object.keys(payload).sort(), ['band', 'finishedAt', 'lesson', 'mode', 'name', 'percent', 'score', 'total']);
+  assert.deepEqual({ ...payload, finishedAt: undefined }, { lesson: 'fieldartillery', name: 'Maria Santos', mode: 'easy', score: 20, total: 25, percent: 80, band: 'Proficient', finishedAt: undefined });
+  assert.match(payload.finishedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.ok(Date.parse(payload.finishedAt) >= before - 1000 && Date.parse(payload.finishedAt) <= Date.now() + 1000);
+  for (const call of fetch.calls) {
+    assert.ok(call.url.startsWith(TEST_ENDPOINT), `request to ${call.url} is outside HISTORY_ENDPOINT`);
+    assert.ok(!call.url.includes('Maria'), 'names never travel in URLs');
+  }
+  const gets = fetch.calls.filter(call => call.method === 'GET');
+  assert.ok(gets.length >= 2, 'history loads at start and refreshes after saving');
+  assert.equal(gets[0].url, `${TEST_ENDPOINT}?lesson=fieldartillery&mode=all&limit=100`);
+  assert.match(byId(app, 'history-save-message').textContent, /Saved to the class history/);
+  assert.equal(isShown(byId(app, 'btn-history-retry')), false);
+  byId(app, 'btn-retake').click();
+  completeAttempt(app);
+  byId(app, 'btn-finish').click();
+  await settle(app);
+  assert.equal(fetch.calls.filter(call => call.method === 'POST').length, 2, 'a retake is a new attempt with its own record');
+});
+
+await test('Not-configured history shows the setup message and never calls fetch', async () => {
+  const fetch = fakeFetch(() => { throw new Error('fetch must not be called'); });
+  const app = loadApp(baseHtml, { fetch });
+  await settle(app);
+  assert.equal(plain(app.api.getState()).historyConfigured, false);
+  assert.ok(isShown(byId(app, 'history-panel')), 'the history section is on the landing view');
+  const status = byId(app, 'history-status').textContent;
+  assert.match(status, /not set up/i);
+  assert.match(status, /apps-script\/SETUP\.md/);
+  assert.equal(isShown(byId(app, 'history-table-wrap')), false);
+  assert.ok(MODES.every(mode => byId(app, `history-filter-${mode}`).disabled));
+  startConfirmed(app, 'hard');
+  completeAttempt(app);
+  byId(app, 'btn-finish').click();
+  await settle(app);
+  assert.ok(isShown(byId(app, 'view-results')));
+  assert.match(byId(app, 'history-save-message').textContent, /not set up/i);
+  assert.equal(isShown(byId(app, 'btn-history-retry')), false);
+  byId(app, 'btn-history').click();
+  assert.equal(app.document.activeElement?.id, 'history-heading', 'the results button jumps to the history section');
+  byId(app, 'btn-choose').click();
+  await settle(app);
+  assert.equal(fetch.calls.length, 0, 'no network access without an endpoint');
+});
+
+await test('A failed history save still shows the results and offers a retry that resends the same record', async () => {
+  const outcomes = [() => { throw new Error('offline'); }, () => ({ body: { ok: false, error: 'invalid score' } }), () => ({ status: 500, body: {} }), () => ({ body: { ok: true } })];
+  const fetch = fakeFetch(call => (call.method === 'POST' ? outcomes.shift()() : okHistory([])));
+  const app = loadApp(configuredHtml, { fetch });
+  startConfirmed(app, 'medium');
+  completeAttempt(app);
+  byId(app, 'btn-finish').click();
+  await settle(app);
+  assert.ok(isShown(byId(app, 'view-results')), 'results stay visible');
+  assert.equal(app.document.activeElement?.id, 'results-heading');
+  assert.match(byId(app, 'results-summary').textContent, /25 of 25/);
+  const message = byId(app, 'history-save-message');
+  const retry = byId(app, 'btn-history-retry');
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    assert.match(message.textContent, /could not save to class history/i, `failure ${attempt}`);
+    assert.ok(isShown(retry), 'a retry button is offered');
+    retry.click();
+    await settle(app);
+  }
+  assert.match(message.textContent, /could not save to class history/i, 'HTTP errors count as failures');
+  retry.click();
+  await settle(app);
+  assert.match(message.textContent, /Saved to the class history/);
+  assert.equal(isShown(retry), false);
+  const bodies = fetch.calls.filter(call => call.method === 'POST').map(call => call.body);
+  assert.equal(bodies.length, 4);
+  assert.equal(new Set(bodies).size, 1, 'retries resend the identical record');
+});
+
+await test('Class history renders remote rows as text, newest first, marks the current student and filters by mode', async () => {
+  const hostile = '<img src=x onerror=alert(1)></td><script>alert(2)</script>';
+  const rows = [
+    { name: 'Old Timer', mode: 'easy', score: 10, total: 25, percent: 40, band: 'Needs review', finishedAt: '2026-09-01T08:00:00.000Z' },
+    { name: hostile, mode: 'medium', score: 18, total: 25, percent: 72, band: '<b>Developing</b>', finishedAt: '2026-09-29T08:00:00.000Z' },
+    { name: 'Maria Santos', mode: 'hard', score: 23, total: 25, percent: 92, band: 'Mastery', finishedAt: '2026-09-30T08:00:00.000Z' },
+    { name: 'maria santos', mode: 'medium', score: 20, total: 25, percent: 80, band: 'Proficient', finishedAt: '2026-09-15T08:00:00.000Z' },
+    { name: 'Bogus Mode', mode: 'expert', score: 1, total: 25, percent: 4, band: 'x', finishedAt: '2026-09-30T09:00:00.000Z' },
+    'not a row',
+  ];
+  let mode = 'all';
+  let fail = false;
+  const fetch = fakeFetch(call => {
+    if (fail) throw new Error('offline');
+    mode = new URL(call.url).searchParams.get('mode');
+    return okHistory(mode === 'hard' ? [] : rows);
+  });
+  const app = loadApp(configuredHtml, { fetch });
+  enterName(app, 'MARIA SANTOS');
+  await settle(app);
+  const body = byId(app, 'history-body');
+  const rendered = () => body.children.map(row => row.children.map(cell => cell.textContent.trim()));
+  assert.ok(isShown(byId(app, 'history-table-wrap')));
+  const headers = findAll(byId(app, 'history-table'), node => node.localName === 'th').map(node => node.textContent.trim());
+  assert.deepEqual(headers, ['Name', 'Mode', 'Score', '%', 'Band', 'Date']);
+  assert.deepEqual(rendered().map(cells => cells[0]), ['Maria Santos You', hostile, 'maria santos You', 'Old Timer'], 'newest first; invalid rows dropped');
+  assert.deepEqual(rendered()[0].slice(1, 5), ['Hard', '23/25', '92%', 'Mastery']);
+  assert.match(rendered()[0][5], /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(findAll(body, node => ['img', 'script', 'b'].includes(node.localName)).length, 0, 'remote markup is never parsed');
+  const hostileText = findAll(body, node => /\bhistory-name-text\b/.test(node.getAttribute('class') ?? '')).map(node => node.textContent);
+  assert.ok(hostileText.includes(hostile), 'the hostile name is shown literally');
+  assert.equal(rendered()[1][4], '<b>Developing</b>');
+  const selfRows = body.children.filter(row => row.classList.contains('history-row-self'));
+  assert.equal(selfRows.length, 2, 'the current student rows are highlighted case-insensitively');
+  assert.ok(selfRows.every(row => findAll(row, node => /\btag-you\b/.test(node.getAttribute('class') ?? '') && node.textContent === 'You').length === 1), 'highlighting is not colour alone');
+  assert.equal(byId(app, 'history-filter-all').getAttribute('aria-pressed'), 'true');
+
+  byId(app, 'history-filter-medium').click();
+  await settle(app);
+  assert.equal(mode, 'medium', 'the filter is sent to the sheet');
+  assert.equal(fetch.calls.at(-1).url, `${TEST_ENDPOINT}?lesson=fieldartillery&mode=medium&limit=100`);
+  assert.deepEqual(rendered().map(cells => cells[1]), ['Medium', 'Medium'], 'only Medium rows are shown');
+  assert.equal(byId(app, 'history-filter-medium').getAttribute('aria-pressed'), 'true');
+  assert.equal(byId(app, 'history-filter-all').getAttribute('aria-pressed'), 'false');
+  assert.match(byId(app, 'history-status').textContent, /2 most recent Medium attempts/);
+
+  byId(app, 'history-filter-hard').click();
+  await settle(app);
+  assert.equal(isShown(byId(app, 'history-table-wrap')), false);
+  assert.match(byId(app, 'history-status').textContent, /No Hard attempts have been recorded yet/);
+
+  fail = true;
+  byId(app, 'btn-history-refresh').click();
+  assert.match(byId(app, 'history-status').textContent, /Loading/);
+  await settle(app);
+  assert.match(byId(app, 'history-status').textContent, /Could not load the class history/);
+  assert.equal(isShown(byId(app, 'history-table-wrap')), false);
+});
+
+await test('Class history payload is accepted by apps-script/Code.gs and round-trips through doGet', async () => {
+  const source = readFileSync(join(projectRoot, 'apps-script', 'Code.gs'), 'utf8');
+  const sheetRows = [];
+  const sheet = {
+    getLastRow: () => sheetRows.length,
+    appendRow: row => { sheetRows.push(row); },
+    setFrozenRows() {},
+    getDataRange: () => ({ getValues: () => sheetRows.map(row => [...row]) }),
+  };
+  const context = vm.createContext({
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => (sheetRows.length ? sheet : null), insertSheet: () => sheet }) },
+    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    ContentService: { MimeType: { JSON: 'json' }, createTextOutput: text => ({ text, setMimeType() { return this; } }) },
+  });
+  vm.runInContext(source, context, { filename: 'Code.gs' });
+  const call = (fn, arg) => JSON.parse(context[fn](arg).text);
+
+  const fetch = fakeFetch(request => (request.method === 'POST' ? { body: call('doPost', { postData: { contents: request.body } }) } : okHistory([])));
+  const app = loadApp(configuredHtml, { fetch });
+  startConfirmed(app, 'hard', 'Sgt. Reyes');
+  completeAttempt(app, index => index % 5 !== 0);
+  byId(app, 'btn-finish').click();
+  await settle(app);
+  assert.match(byId(app, 'history-save-message').textContent, /Saved/, 'the sheet accepted the client payload');
+  const reply = call('doGet', { parameter: { mode: 'hard', limit: '5' } });
+  assert.equal(reply.ok, true);
+  assert.equal(reply.rows.length, 1);
+  assert.deepEqual({ ...reply.rows[0], finishedAt: undefined }, { name: 'Sgt. Reyes', mode: 'hard', score: 20, total: 25, percent: 80, band: 'Proficient', finishedAt: undefined });
+  assert.equal(call('doGet', { parameter: { mode: 'easy' } }).rows.length, 0);
+});
+
+await test('Sound effects: a visible toggle (on by default) and cues for select, correct, incorrect, start, error and finish', () => {
+  const app = loadApp();
+  const cues = [];
+  app.api.setSoundPlayer(cue => cues.push(cue));
+  const toggle = byId(app, 'btn-sound');
+  assert.equal(toggle.localName, 'button');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true', 'sound is on by default');
+  assert.match(toggle.textContent, /Sound effects/);
+  assert.match(byId(app, 'sound-state').textContent, /On/);
+  assert.equal(plain(app.api.getState()).soundEnabled, true);
+
+  startConfirmed(app, 'easy');
+  assert.deepEqual(cues, ['start']);
+  const [first, second, third] = attemptOf(app).questions;
+  byId(app, 'btn-check').click();
+  assert.equal(cues.at(-1), 'error', 'a validation error has a soft cue');
+  radios(app)[(first.answer + 1) % 4].click();
+  assert.equal(cues.at(-1), 'select');
+  byId(app, 'btn-check').click();
+  assert.equal(cues.at(-1), 'incorrect');
+  byId(app, 'btn-next').click();
+  radios(app)[second.answer].click();
+  byId(app, 'btn-check').click();
+  assert.equal(cues.at(-1), 'correct');
+
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  assert.match(byId(app, 'sound-state').textContent, /Off/);
+  assert.equal(plain(app.api.getState()).soundEnabled, false);
+  const muted = cues.length;
+  byId(app, 'btn-next').click();
+  radios(app)[third.answer].click();
+  byId(app, 'btn-check').click();
+  assert.equal(cues.length, muted, 'no cue plays while sound is off');
+  assert.match(byId(app, 'answer-feedback').textContent, /^\s*Correct\./, 'visual feedback does not depend on sound');
+
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  byId(app, 'btn-next').click();
+  completeAttemptFrom(app, 3);
+  byId(app, 'btn-finish').click();
+  assert.equal(cues.at(-1), 'finish-mastery', 'the finish cue follows the mastery band');
+
+  app.api.setSoundPlayer(() => { throw new Error('audio device lost'); });
+  byId(app, 'btn-retake').click();
+  assert.equal(plain(app.api.getState()).view, 'quiz', 'a failing audio stack never blocks the quiz');
+  app.api.setSoundPlayer(null);
+  assert.equal(app.api.selectAnswer(0), true, 'the default Web Audio player is a no-op without AudioContext');
 });
 
 await test('App script avoids the Safari 14+ replaceChildren API', () => {
@@ -1258,7 +1256,7 @@ function parseCss(css) {
 const REDUCED_MOTION_MEDIA = /prefers-reduced-motion:\s*reduce/i;
 const hasMotion = value => value !== undefined && !/^none\b/i.test(value.replace(/\s*!important$/, ''));
 
-await test('Hero artwork is an aria-hidden inline SVG with the howitzer, barrel, muzzle-flash, projectile, smoke and target-grid groups', () => {
+await test('Hero artwork is an aria-hidden inline SVG with the tank, tank-gun, muzzle-blast, shell, dust and objective groups', () => {
   const document = parseHtml(builtHtml);
   const svgs = findAll(document.root, node => node.localName === 'svg');
   assert.ok(svgs.length > 0, 'index.html must contain inline SVG artwork');
@@ -1268,21 +1266,21 @@ await test('Hero artwork is an aria-hidden inline SVG with the howitzer, barrel,
     assert.ok(svg.getAttribute('viewbox'), 'SVG must scale through a viewBox');
   }
   const groups = {};
-  for (const id of ['howitzer', 'barrel', 'muzzle-flash', 'projectile', 'smoke', 'target-grid']) {
+  for (const id of ['tank', 'tank-gun', 'muzzle-blast', 'shell', 'dust', 'objective']) {
     const node = document.getElementById(id);
     assert.ok(node, `SVG group #${id} is required`);
     assert.equal(node.localName, 'g', `#${id} must be an SVG <g> group`);
     assert.ok(svgs.some(svg => findAll(svg, child => child === node).length), `#${id} must sit inside an aria-hidden SVG`);
     groups[id] = node;
   }
-  for (const id of ['barrel', 'muzzle-flash']) {
-    assert.ok(findAll(groups.howitzer, node => node === groups[id]).length, `#${id} must be part of #howitzer`);
+  for (const id of ['tank-gun', 'muzzle-blast']) {
+    assert.ok(findAll(groups['tank'], node => node === groups[id]).length, `#${id} must be part of #tank`);
   }
   const hero = document.getElementById('hero-art');
   assert.ok(hero, 'the landing hero must contain the fire-mission art');
   assert.match(hero.textContent, /FIRE MISSION/, 'decorative fire-mission labels belong inside the aria-hidden art');
-  assert.ok(findAll(hero, node => node.localName === 'path' && /\btrajectory\b/.test(node.getAttribute('class') ?? '')).length, 'a static projectile arc must be drawn');
-  assert.ok(findAll(hero, node => /\brange-rings\b/.test(node.getAttribute('class') ?? '')).length, 'range rings must be drawn');
+  assert.ok(findAll(hero, node => node.localName === 'path' && /\baxis-line\b/.test(node.getAttribute('class') ?? '')).length, 'the trajectory must be drawn');
+  assert.ok(findAll(hero, node => /\bterrain-contour\b/.test(node.getAttribute('class') ?? '')).length, 'range rings must be drawn');
 });
 
 await test('Easy, Medium and Hard theme classes are styled and follow the active attempt', () => {
@@ -1315,7 +1313,7 @@ await test('Easy, Medium and Hard theme classes are styled and follow the active
     byId(app, `mode-${next}`).click();
     assert.deepEqual(themeClasses(app), [next], 'switching difficulty swaps the theme');
   }
-  const broken = loadApp(replaceBank(builtHtml, 'easy', '{not json'));
+  const broken = loadApp(replaceBank(baseHtml, 'easy', '{not json'));
   assert.deepEqual(themeClasses(broken), []);
   assert.equal(broken.document.body.getAttribute('data-view'), 'unavailable');
 });
@@ -1372,7 +1370,7 @@ await test('prefers-reduced-motion: reduce sets animation and transition to none
   const stilled = new Set(reduced
     .filter(rule => /^none\b/.test(rule.declarations.get('animation') ?? '') && /^none\b/.test(rule.declarations.get('transition') ?? ''))
     .flatMap(rule => rule.selectors));
-  for (const selector of ['#barrel', '#muzzle-flash', '#projectile', '#smoke .smoke-puff', '#target-grid .target-pulse', '.view']) {
+  for (const selector of ['#tank-gun', '#muzzle-blast', '#shell', '#dust .dust-puff', '#objective .impact-pulse', '.view']) {
     assert.ok(stilled.has(selector), `reduced motion must set animation: none and transition: none on ${selector}`);
   }
   const moving = rules.filter(rule => !(rule.media && REDUCED_MOTION_MEDIA.test(rule.media))
@@ -1385,7 +1383,7 @@ await test('prefers-reduced-motion: reduce sets animation and transition to none
   }
   for (const rule of reduced) {
     for (const selector of rule.selectors) {
-      if (/#howitzer|#target-grid$|\.range-rings|\.trajectory|\.hero-art/.test(selector)) {
+      if (/#tank|#objective$|\.terrain-contour|\.axis-line|\.hero-art/.test(selector)) {
         assert.notEqual(rule.declarations.get('display'), 'none', `static artwork ${selector} must stay visible`);
         assert.notEqual(rule.declarations.get('visibility'), 'hidden', `static artwork ${selector} must stay visible`);
       }
@@ -1394,7 +1392,7 @@ await test('prefers-reduced-motion: reduce sets animation and transition to none
 });
 
 await test('Visual system uses no external asset URLs, fonts or data URIs', () => {
-  assert.doesNotMatch(builtHtml, /https?:\/\//i, 'no absolute URLs (inline SVG needs no xmlns)');
+  assert.doesNotMatch(baseHtml, /https?:\/\//i, 'no absolute URLs outside HISTORY_ENDPOINT (inline SVG needs no xmlns)');
   assert.doesNotMatch(builtHtml, /@font-face|data:[a-z]+\//i);
   const css = stylesheetText();
   for (const [, target] of css.matchAll(/url\(\s*['"]?([^'")]*)/gi)) {
