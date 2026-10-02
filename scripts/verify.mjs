@@ -8,6 +8,13 @@ import vm from 'node:vm';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const buildPath = join(projectRoot, 'scripts', 'build.mjs');
+// Relative same-origin assets/ images are the only image markup allowed; strip them before the "no external assets" checks.
+function stripAssetImages(html) {
+  return html.replace(/<(?:img|source)\b[^>]*>/gi, tag => {
+    const urls = [...tag.matchAll(/\b(?:src|srcset)="([^"]*)"/gi)].flatMap(m => m[1].split(',').map(u => u.trim().split(/\s+/)[0]));
+    return urls.length && urls.every(u => /^assets\/[\w.-]+\.jpg$/.test(u)) ? '' : tag;
+  });
+}
 let failures = 0;
 let tests = 0;
 
@@ -900,7 +907,7 @@ await test('App keeps answers in memory only: its one network call goes to HISTO
   assert.equal(builtHtml.split('var HISTORY_ENDPOINT =').length - 1, 1, 'HISTORY_ENDPOINT is declared exactly once');
   const endpoint = builtHtml.match(ENDPOINT_PATTERN)[1];
   assert.ok(endpoint === '' || /^https:\/\/[^\s'"<>\\]+$/.test(endpoint), 'HISTORY_ENDPOINT must be empty or an https URL');
-  assert.doesNotMatch(builtHtml, /<link\b|<img\b|<iframe\b|<audio\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
+  assert.doesNotMatch(stripAssetImages(builtHtml), /<link\b|<img\b|<iframe\b|<audio\b|\bsrc\s*=|@import|url\(\s*['"]?(?:https?:)?\/\//i);
   assert.doesNotMatch(builtHtml, /\.(?:mp3|wav|ogg|m4a)\b/i, 'sounds are synthesised, never loaded');
 });
 
@@ -1404,6 +1411,44 @@ await test('Visual system uses no external asset URLs, fonts or data URIs', () =
   const { rules } = parseCss(css);
   const bodyFont = rules.find(rule => !rule.media && rule.selectors.includes('body'))?.declarations.get('font-family') ?? '';
   assert.match(bodyFont, /system-ui/, 'body uses a system font stack');
+});
+
+
+// ---- Visual upgrade: topographic background, class banner and class photo ----
+await test('Class banner, photo card and contour background markup exist, with the four asset files on disk', async () => {
+  const { existsSync } = await import('node:fs');
+  const banner = builtHtml.match(/<div class="banner"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? '';
+  assert.ok(banner, 'banner container exists');
+  assert.match(banner, /<picture>[\s\S]*<source media="\(max-width: 800px\)" srcset="assets\/banner-800\.jpg">/);
+  assert.match(banner, /<img [^>]*src="assets\/banner-1600\.jpg"/);
+  assert.match(banner, /\bwidth="1600"[^>]*\bheight="900"/);
+  assert.match(banner, /fetchpriority="high"/);
+  assert.match(banner, /alt="Bandwidth Brothers banner"/);
+  const figure = builtHtml.match(/<figure class="class-photo"[^>]*>[\s\S]*?<\/figure>/)?.[0] ?? '';
+  assert.ok(figure, 'class photo figure exists');
+  assert.match(figure, /srcset="assets\/class-photo-800\.jpg 800w, assets\/class-photo-1600\.jpg 1600w"/);
+  assert.match(figure, /loading="lazy"/);
+  assert.match(figure, /decoding="async"/);
+  assert.match(figure, /\bwidth="1600"[^>]*\bheight="1200"/);
+  assert.match(figure, /alt="SOAC 52 - 2026 class group photo"/);
+  assert.equal(figure.match(/<figcaption>([^<]*)<\/figcaption>/)?.[1], 'SOAC 52 - 2026');
+  for (const file of ['banner-800.jpg', 'banner-1600.jpg', 'class-photo-800.jpg', 'class-photo-1600.jpg']) {
+    assert.ok((banner + figure).includes('assets/' + file), file + ' is referenced');
+    assert.ok(existsSync(join(projectRoot, 'assets', file)), 'assets/' + file + ' exists on disk');
+  }
+  assert.ok(!/data:image/i.test(builtHtml), 'images are never inlined');
+  assert.match(builtHtml, /<div class="terrain" aria-hidden="true">\s*<svg [^>]*preserveAspectRatio="xMidYMid slice"[^>]*aria-hidden="true"/);
+  assert.ok(/<g class="contours"/.test(builtHtml) && /class="major"/.test(builtHtml), 'contour fragment is present');
+});
+
+await test('Banner and class photo are landing-only and hidden in print', () => {
+  const css = stylesheetText();
+  assert.match(css, /body:not\(\[data-view="landing"\]\)\s+\.banner\s*,\s*body:not\(\[data-view="landing"\]\)\s+\.class-photo\s*\{\s*display:\s*none/);
+  const print = css.slice(css.lastIndexOf('@media print'));
+  assert.match(print, /\.banner/);
+  assert.match(print, /\.class-photo/);
+  assert.match(css, /--contour-minor:[^;]*0?\.22/);
+  assert.match(css, /--contour-major:[^;]*0?\.4\b/);
 });
 
 if (failures > 0) {
