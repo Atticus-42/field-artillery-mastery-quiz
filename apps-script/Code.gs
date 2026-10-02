@@ -9,6 +9,7 @@ var LESSONS = {
   armor: 'Armor History',                  // Fundamentals of Armor Operations quiz
   fieldartillery: 'Field Artillery History', // Field Artillery Operations quiz
   armyops: 'Army Operations History',        // Introduction to Army Operations quiz
+  signal: 'Signal Support History',          // Signal Support in Combined Arms Operations quiz (Module 3)
   combined: 'Combined Exam History'          // 30-question exam drawn from all lessons; add more lines here for future lessons
 };
 var TOTALS = { combined: 30 };               // questions per attempt; lessons not listed use DEFAULT_TOTAL
